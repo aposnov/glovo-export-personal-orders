@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glovo — куда уходят деньги</title>
+<style>
+  :root {
+    --bg: #fbfaf8;
+    --panel: #ffffff;
+    --ink: #1c1b19;
+    --muted: #6f6a63;
+    --line: #e6e2db;
+    --accent: #00a082;
+    --accent-soft: #d9f0ea;
+    --warn: #b45309;
+    --warn-soft: #fdf1de;
+    --bar2: #f4a261;
+    --radius: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16161a;
+      --panel: #1e1e23;
+      --ink: #ececee;
+      --muted: #9b968f;
+      --line: #2f2f37;
+      --accent: #2ec9a6;
+      --accent-soft: #1d3b36;
+      --warn: #f0b03f;
+      --warn-soft: #33280f;
+      --bar2: #e08a4e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 26px; letter-spacing: -0.02em; margin: 0 0 6px; }
+  h2 { font-size: 15px; letter-spacing: -0.01em; margin: 0 0 14px; font-weight: 600; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+
+  #drop {
+    border: 2px dashed var(--line);
+    border-radius: var(--radius);
+    padding: 44px 24px;
+    text-align: center;
+    background: var(--panel);
+    transition: border-color .15s, background .15s;
+  }
+  #drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  #drop p { margin: 0 0 14px; color: var(--muted); }
+  button {
+    font: inherit;
+    font-weight: 500;
+    color: #fff;
+    background: var(--accent);
+    border: 0;
+    border-radius: 8px;
+    padding: 9px 16px;
+    cursor: pointer;
+  }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  .err { color: var(--warn); margin-top: 14px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+  .kpi .v { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+  .kpi .l { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+  .notice {
+    background: var(--warn-soft);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--warn);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin-bottom: 24px;
+    font-size: 14px;
+  }
+  .notice b { font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; overflow: hidden; }
+  .card.wide { grid-column: 1 / -1; }
+  .card .hint { color: var(--muted); font-size: 13px; margin: 12px 0 0; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .bar { fill: var(--accent); }
+  .bar.alt { fill: var(--bar2); }
+  .tick { fill: var(--muted); font-size: 11px; }
+  .val { fill: var(--ink); font-size: 11px; font-weight: 500; }
+  .axis { stroke: var(--line); }
+
+  .split { display: flex; height: 30px; border-radius: 6px; overflow: hidden; margin-bottom: 12px; }
+  .split div { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 600; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  .legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
+  .legend .a::before { background: var(--accent); }
+  .legend .b::before { background: var(--bar2); }
+
+  select { font: inherit; padding: 5px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td { padding: 5px 0; border-bottom: 1px solid var(--line); }
+  td.n { text-align: right; color: var(--muted); white-space: nowrap; padding-left: 12px; }
+  tr:last-child td { border-bottom: 0; }
+  .foot { color: var(--muted); font-size: 13px; margin-top: 28px; }
+  #signin { margin-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  #signin-text { color: var(--muted); font-size: 14px; margin: 0; }
+  #who { margin-top: 12px; }
+  section.step { border: 1px solid var(--line); border-radius: 14px; padding: 22px; margin-bottom: 18px; background: var(--panel); }
+  section.step h2 { font-size: 17px; margin: 0 0 8px; }
+  section.step p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+  #progress { color: var(--ink); font-size: 15px; }
+  #pwform { display: flex; flex-direction: column; gap: 8px; width: 260px; }
+  #pwform input { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+  #pwform .row { display: flex; gap: 8px; }
+  #pwform button { flex: 1; }
+  a.bmk {
+    display: inline-block; padding: 12px 18px; border-radius: 10px;
+    background: var(--accent); color: #fff; font-weight: 600;
+    text-decoration: none; cursor: grab;
+  }
+  .divider { color: var(--muted); font-size: 13px; }
+  details.fallback { margin-top: 8px; }
+  details.fallback summary { color: var(--muted); font-size: 13px; cursor: pointer; }
+  a { color: var(--accent); }
+  a.bmk { color: #fff; }
+  ol.howto { margin: 0 0 14px; padding-left: 22px; }
+  ol.howto li { margin: 0 0 18px; line-height: 1.5; }
+  ol.howto li p { margin: 8px 0 0; }
+  code { background: var(--accent-soft); border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Куда уходят деньги в Glovo</h1>
+  <p class="sub">Перетащи сюда выгрузку <code>glovo-orders-*.json</code>. Файл читается прямо в браузере — страница не делает ни одного сетевого запроса.</p>
+
+  <div id="drop">
+    <p>Перетащи сюда <code>glovo-orders-*.json</code></p>
+    <button id="pick">Выбрать файл</button>
+    <input id="file" type="file" accept="application/json,.json" hidden>
+    <div id="err" class="err" hidden></div>
+  </div>
+
+  <div id="app" hidden></div>
+
+  <p class="foot" id="foot" hidden></p>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const drop = $('drop');
+const app = $('app');
+
+$('pick').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', (e) => { if (e.target.files[0]) readFile(e.target.files[0]); });
+
+for (const type of ['dragenter', 'dragover']) {
+  drop.addEventListener(type, (e) => { e.preventDefault(); drop.classList.add('over'); });
+}
+for (const type of ['dragleave', 'drop']) {
+  drop.addEventListener(type, (e) => { e.preventDefault(); drop.classList.remove('over'); });
+}
+drop.addEventListener('drop', (e) => { if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]); });
+
+function fail(message) {
+  const box = $('err');
+  box.textContent = message;
+  box.hidden = false;
+}
+
+function readFile(file) {
+  $('err').hidden = true;
+  const reader = new FileReader();
+  reader.onerror = () => fail('Файл не прочитался.');
+  reader.onload = () => {
+    let parsed;
+    try {
+      parsed = JSON.parse(reader.result);
+    } catch {
+      fail('Это не JSON.');
+      return;
+    }
+    if (!parsed || !Array.isArray(parsed.orders)) {
+      fail('В файле нет массива orders — это выгрузка glovo-export?');
+      return;
+    }
+    render(parsed);
+  };
+  reader.readAsText(file);
+}
+
+const NBSP = ' ';
+
+function makeMoney(currency) {
+  const format = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const suffix = currency === 'EUR' ? `${NBSP}€` : currency ? `${NBSP}${currency}` : '';
+  return (value) => `${format.format(value)}${suffix}`;
+}
+
+function localParts(iso) {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return {
+    month: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+    hour: date.getHours(),
+  };
+}
+
+function spendOf(order) {
+  if (order.excludedFromSpend) return 0;
+  return order.totals?.total ?? 0;
+}
+
+function median(values) {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function escapeText(value) {
+  return String(value).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
+}
+
+function columns(rows, formatValue, options = {}) {
+  const width = 640;
+  const height = options.height ?? 190;
+  const padBottom = 26;
+  const padTop = 20;
+  const max = Math.max(...rows.map((row) => row.value), 0) || 1;
+  const step = width / rows.length;
+  const barWidth = Math.min(step * 0.62, 56);
+  const plot = height - padBottom - padTop;
+
+  const bars = rows.map((row, index) => {
+    const barHeight = (row.value / max) * plot;
+    const x = index * step + (step - barWidth) / 2;
+    const y = padTop + plot - barHeight;
+    const label = row.emphasis ? 'bar alt' : 'bar';
+    const value = row.value > 0
+      ? `<text class="val" x="${x + barWidth / 2}" y="${y - 6}" text-anchor="middle">${escapeText(formatValue(row.value))}</text>`
+      : '';
+    return `<rect class="${label}" x="${x}" y="${y}" width="${barWidth}" height="${Math.max(barHeight, row.value > 0 ? 2 : 0)}" rx="3"></rect>
+      ${value}
+      <text class="tick" x="${index * step + step / 2}" y="${height - 8}" text-anchor="middle">${escapeText(row.label)}</text>`;
+  });
+
+  return `<svg viewBox="0 0 ${width} ${height}" role="img">
+    <line class="axis" x1="0" y1="${padTop + plot}" x2="${width}" y2="${padTop + plot}"></line>
+    ${bars.join('')}
+  </svg>`;
+}
+
+function bars(rows, formatValue) {
+  const width = 640;
+  const rowHeight = 30;
+  const labelWidth = 190;
+  const height = rows.length * rowHeight;
+  const max = Math.max(...rows.map((row) => row.value), 0) || 1;
+  const track = width - labelWidth - 96;
+
+  const body = rows.map((row, index) => {
+    const y = index * rowHeight;
+    const barWidth = Math.max((row.value / max) * track, 2);
+    return `<text class="tick" x="0" y="${y + 19}">${escapeText(row.label)}</text>
+      <rect class="bar" x="${labelWidth}" y="${y + 8}" width="${barWidth}" height="14" rx="3"></rect>
+      <text class="val" x="${labelWidth + barWidth + 8}" y="${y + 19}">${escapeText(formatValue(row.value))}</text>`;
+  });
+
+  return `<svg viewBox="0 0 ${width} ${height}" role="img">${body.join('')}</svg>`;
+}
+
+function render(file) {
+  const orders = file.orders;
+  const currency = orders.find((order) => order.currency)?.currency ?? null;
+  const money = makeMoney(currency);
+
+  const counted = orders.filter((order) => !order.excludedFromSpend);
+  const cancelled = orders.filter((order) => order.excludedFromSpend === 'cancelled');
+  const refunded = counted.filter((order) => order.refunded);
+  const totalSpend = orders.reduce((sum, order) => sum + spendOf(order), 0);
+  const refundedSpend = refunded.reduce((sum, order) => sum + spendOf(order), 0);
+  const sizes = counted.map(spendOf).filter((value) => value > 0);
+
+  const byMonth = new Map();
+  const byHour = new Map();
+  let undated = 0;
+  for (const order of counted) {
+    const parts = localParts(order.date);
+    if (!parts) { undated += 1; continue; }
+    byMonth.set(parts.month, (byMonth.get(parts.month) ?? 0) + spendOf(order));
+    byHour.set(parts.hour, (byHour.get(parts.hour) ?? 0) + 1);
+  }
+
+  const months = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([key, value]) => ({ label: key.slice(2).replace('-', '.'), value }));
+
+  const hours = [];
+  for (let hour = 0; hour < 24; hour += 1) {
+    hours.push({ label: hour % 3 === 0 ? String(hour) : '', value: byHour.get(hour) ?? 0 });
+  }
+
+  const byStore = new Map();
+  for (const order of counted) {
+    const name = order.store?.name ?? 'без названия';
+    const entry = byStore.get(name) ?? { spend: 0, count: 0 };
+    entry.spend += spendOf(order);
+    entry.count += 1;
+    byStore.set(name, entry);
+  }
+  const stores = [...byStore.entries()].sort((a, b) => b[1].spend - a[1].spend).slice(0, 10)
+    .map(([name, entry]) => ({ label: `${name} (${entry.count})`, value: entry.spend }));
+
+  const byVertical = new Map();
+  for (const order of counted) {
+    const key = order.vertical ?? 'UNKNOWN';
+    const entry = byVertical.get(key) ?? { spend: 0, count: 0 };
+    entry.spend += spendOf(order);
+    entry.count += 1;
+    byVertical.set(key, entry);
+  }
+  const verticals = [...byVertical.entries()].sort((a, b) => b[1].spend - a[1].spend);
+
+  const edges = [0, 10, 20, 30, 40, 50, 60];
+  const buckets = edges.map((edge, index) => ({
+    label: index === edges.length - 1 ? '60+' : `${edge}–${edges[index + 1]}`,
+    value: 0,
+  }));
+  for (const size of sizes) {
+    let index = edges.findIndex((edge, position) => position === edges.length - 1 || size < edges[position + 1]);
+    if (index < 0) index = edges.length - 1;
+    buckets[index].value += 1;
+  }
+
+  let discountTotal = 0;
+  let discountedItems = 0;
+  for (const order of counted) {
+    for (const item of order.items ?? []) {
+      if (item.charged && typeof item.discount === 'number' && item.discount < 0) {
+        discountTotal += item.discount;
+        discountedItems += 1;
+      }
+    }
+  }
+
+  const dates = counted.map((order) => order.date).filter(Boolean).sort();
+  const range = dates.length ? `${dates[0].slice(0, 10)} — ${dates[dates.length - 1].slice(0, 10)}` : 'нет дат';
+  const monthlyAverage = months.length ? totalSpend / months.length : 0;
+
+  const notices = [];
+  if (cancelled.length) {
+    notices.push(`<b>${cancelled.length}</b> отменённых заказов исключены — у них нет суммы.`);
+  }
+  if (refunded.length) {
+    notices.push(`<b>${refunded.length}</b> заказов с возвратом на ${money(refundedSpend)} <b>учтены</b>: API не сообщает, сколько именно вернули, поэтому в тратах стоит списанная сумма.`);
+  }
+  if (undated) {
+    notices.push(`<b>${undated}</b> заказов без даты не попали в графики по месяцам и часам.`);
+  }
+  const mismatches = counted.filter((order) => order.validation?.productsMatch === false).length;
+  if (mismatches) {
+    notices.push(`У <b>${mismatches}</b> заказов сумма позиций не сходится со строкой PRODUCTS — обычное дело для продуктовых, состав меняется после сборки. Итоговые суммы это не затрагивает.`);
+  }
+
+  const storeNames = [...byStore.keys()].sort((a, b) => byStore.get(b).count - byStore.get(a).count);
+
+  app.innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><div class="v">${money(totalSpend)}</div><div class="l">всего за ${escapeText(range)}</div></div>
+      <div class="kpi"><div class="v">${counted.length}</div><div class="l">заказов учтено</div></div>
+      <div class="kpi"><div class="v">${money(monthlyAverage)}</div><div class="l">в среднем за месяц</div></div>
+      <div class="kpi"><div class="v">${money(median(sizes))}</div><div class="l">медианный чек</div></div>
+      <div class="kpi"><div class="v">${money(Math.abs(discountTotal))}</div><div class="l">скидок поймано (${discountedItems} позиций)</div></div>
+    </div>
+
+    ${notices.length ? `<div class="notice">${notices.join('<br>')}</div>` : ''}
+
+    <div class="grid">
+      <div class="card wide">
+        <h2>Траты по месяцам</h2>
+        ${columns(months, (value) => Math.round(value))}
+        <p class="hint">Месяц берётся по твоему часовому поясу, а не по UTC.</p>
+      </div>
+
+      <div class="card wide">
+        <h2>Рестораны против продуктов</h2>
+        <div class="split">${verticals.map((entry, index) => {
+          const share = (entry[1].spend / (totalSpend || 1)) * 100;
+          const color = index === 0 ? 'var(--accent)' : 'var(--bar2)';
+          return `<div style="width:${share}%;background:${color}">${share >= 12 ? `${Math.round(share)}%` : ''}</div>`;
+        }).join('')}</div>
+        <div class="legend">${verticals.map((entry, index) => {
+          const label = { FOOD: 'Рестораны', Q_COMMERCE: 'Продукты' }[entry[0]] ?? entry[0];
+          return `<span class="${index === 0 ? 'a' : 'b'}">${escapeText(label)} — ${money(entry[1].spend)}, ${entry[1].count} заказов</span>`;
+        }).join('')}</div>
+      </div>
+
+      <div class="card">
+        <h2>Топ магазинов по тратам</h2>
+        ${bars(stores, money)}
+        <p class="hint">В скобках — количество заказов.</p>
+      </div>
+
+      <div class="card">
+        <h2>Размер чека</h2>
+        ${columns(buckets, (value) => value)}
+        <p class="hint">Сколько заказов попало в каждый диапазон, ${currency === 'EUR' ? '€' : currency ?? ''}.</p>
+      </div>
+
+      <div class="card wide">
+        <h2>Время заказа</h2>
+        ${columns(hours, (value) => (value ? value : ''), { height: 170 })}
+        <p class="hint">Часы местные (${escapeText(Intl.DateTimeFormat().resolvedOptions().timeZone)}). В выгрузке даты в UTC — здесь они уже переведены.</p>
+      </div>
+
+      <div class="card wide">
+        <h2>Что берёшь чаще всего</h2>
+        <select id="store-pick">${storeNames.map((name) => `<option>${escapeText(name)}</option>`).join('')}</select>
+        <div id="store-items"></div>
+        <p class="hint">Только внутри одного магазина: у разных магазинов один и тот же товар называется по-разному («Agua Bezoya Mineral 1,5 L 1 Ud.» и «Agua Mineral Bezoya, Botella 1,5 L.» — это одна вода), поэтому общий топ по всем магазинам был бы враньём.</p>
+      </div>
+    </div>
+  `;
+
+  const picker = $('store-pick');
+  const renderItems = () => {
+    const name = picker.value;
+    const items = new Map();
+    for (const order of counted) {
+      if ((order.store?.name ?? 'без названия') !== name) continue;
+      for (const item of order.items ?? []) {
+        if (!item.charged || !item.name) continue;
+        const entry = items.get(item.name) ?? { count: 0, spend: 0 };
+        entry.count += item.quantity ?? 1;
+        entry.spend += item.lineTotal ?? 0;
+        items.set(item.name, entry);
+      }
+    }
+    const top = [...items.entries()].sort((a, b) => b[1].spend - a[1].spend).slice(0, 12);
+    $('store-items').innerHTML = top.length
+      ? `<table>${top.map(([label, entry]) =>
+          `<tr><td>${escapeText(label)}</td><td class="n">${entry.count % 1 ? entry.count.toFixed(1) : entry.count}×</td><td class="n">${money(entry.spend)}</td></tr>`,
+        ).join('')}</table>`
+      : '<p class="hint">В этом магазине нет оплаченных позиций.</p>';
+  };
+  picker.addEventListener('change', renderItems);
+  renderItems();
+
+  drop.hidden = true;
+  app.hidden = false;
+  const foot = $('foot');
+  foot.textContent = file.meta
+    ? `Выгрузка от ${(file.meta.exportedAt ?? '').slice(0, 10)} · ${orders.length} заказов в файле · ${file.meta.warnings?.length ?? 0} предупреждений парсера`
+    : `${orders.length} заказов из вашего аккаунта`;
+  foot.hidden = false;
+}
+</script>
+</body>
+</html>

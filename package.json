@@ -1,0 +1,21 @@
+{
+  "name": "glovo-export",
+  "version": "1.0.0",
+  "description": "Выгрузка истории заказов Glovo в JSON — локально, через собственный браузер",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "login": "tsx src/cli.ts login",
+    "export": "tsx src/cli.ts export",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0",
+    "tsx": "^4.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.7.0"
+  }
+}
