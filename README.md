@@ -137,7 +137,7 @@ The repo ships `viewer.html` — a single file, no dependencies, no build.
 open viewer.html      # macOS; xdg-open on Linux; on Windows just double-click
 ```
 
-Drop your exported JSON onto the window. It computes: spend by month, restaurants vs grocery, top stores, order size, time of day, and what you order most often.
+Drop your exported JSON onto the window. It computes: spend by month, restaurants vs groceries, top stores by spend, order size, time of day, and what you order most.
 
 The page issues **zero network requests** — the file is read through `FileReader` and everything is computed in the browser. Verify it yourself: open the Network tab in devtools and drop the file.
 

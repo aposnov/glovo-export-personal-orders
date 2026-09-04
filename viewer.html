@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Glovo — куда уходят деньги</title>
+<title>Glovo — where the money goes</title>
 <style>
   :root {
     --bg: #fbfaf8;
@@ -137,12 +137,12 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Куда уходят деньги в Glovo</h1>
-  <p class="sub">Перетащи сюда выгрузку <code>glovo-orders-*.json</code>. Файл читается прямо в браузере — страница не делает ни одного сетевого запроса.</p>
+  <h1>Where your money goes on Glovo</h1>
+  <p class="sub">Drop your <code>glovo-orders-*.json</code> export here. The file is read in your browser — this page makes no network requests at all.</p>
 
   <div id="drop">
-    <p>Перетащи сюда <code>glovo-orders-*.json</code></p>
-    <button id="pick">Выбрать файл</button>
+    <p>Drop <code>glovo-orders-*.json</code> here</p>
+    <button id="pick">Choose a file</button>
     <input id="file" type="file" accept="application/json,.json" hidden>
     <div id="err" class="err" hidden></div>
   </div>
@@ -177,17 +177,17 @@ function fail(message) {
 function readFile(file) {
   $('err').hidden = true;
   const reader = new FileReader();
-  reader.onerror = () => fail('Файл не прочитался.');
+  reader.onerror = () => fail('Could not read the file.');
   reader.onload = () => {
     let parsed;
     try {
       parsed = JSON.parse(reader.result);
     } catch {
-      fail('Это не JSON.');
+      fail('This is not JSON.');
       return;
     }
     if (!parsed || !Array.isArray(parsed.orders)) {
-      fail('В файле нет массива orders — это выгрузка glovo-export?');
+      fail('No orders array in this file — is it a glovo-export export?');
       return;
     }
     render(parsed);
@@ -198,7 +198,7 @@ function readFile(file) {
 const NBSP = ' ';
 
 function makeMoney(currency) {
-  const format = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const format = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const suffix = currency === 'EUR' ? `${NBSP}€` : currency ? `${NBSP}${currency}` : '';
   return (value) => `${format.format(value)}${suffix}`;
 }
@@ -309,7 +309,7 @@ function render(file) {
 
   const byStore = new Map();
   for (const order of counted) {
-    const name = order.store?.name ?? 'без названия';
+    const name = order.store?.name ?? 'unnamed';
     const entry = byStore.get(name) ?? { spend: 0, count: 0 };
     entry.spend += spendOf(order);
     entry.count += 1;
@@ -351,80 +351,80 @@ function render(file) {
   }
 
   const dates = counted.map((order) => order.date).filter(Boolean).sort();
-  const range = dates.length ? `${dates[0].slice(0, 10)} — ${dates[dates.length - 1].slice(0, 10)}` : 'нет дат';
+  const range = dates.length ? `${dates[0].slice(0, 10)} — ${dates[dates.length - 1].slice(0, 10)}` : 'no dates';
   const monthlyAverage = months.length ? totalSpend / months.length : 0;
 
   const notices = [];
   if (cancelled.length) {
-    notices.push(`<b>${cancelled.length}</b> отменённых заказов исключены — у них нет суммы.`);
+    notices.push(`<b>${cancelled.length}</b> cancelled orders excluded — they carry no total.`);
   }
   if (refunded.length) {
-    notices.push(`<b>${refunded.length}</b> заказов с возвратом на ${money(refundedSpend)} <b>учтены</b>: API не сообщает, сколько именно вернули, поэтому в тратах стоит списанная сумма.`);
+    notices.push(`<b>${refunded.length}</b> refunded orders worth ${money(refundedSpend)} are <b>counted</b>: the API never says how much was returned, so spend keeps what was actually charged.`);
   }
   if (undated) {
-    notices.push(`<b>${undated}</b> заказов без даты не попали в графики по месяцам и часам.`);
+    notices.push(`<b>${undated}</b> orders have no date and are missing from the month and hour charts.`);
   }
   const mismatches = counted.filter((order) => order.validation?.productsMatch === false).length;
   if (mismatches) {
-    notices.push(`У <b>${mismatches}</b> заказов сумма позиций не сходится со строкой PRODUCTS — обычное дело для продуктовых, состав меняется после сборки. Итоговые суммы это не затрагивает.`);
+    notices.push(`In <b>${mismatches}</b> orders the item sum disagrees with the PRODUCTS line — normal for groceries, where the basket changes after picking. Totals are unaffected.`);
   }
 
   const storeNames = [...byStore.keys()].sort((a, b) => byStore.get(b).count - byStore.get(a).count);
 
   app.innerHTML = `
     <div class="kpis">
-      <div class="kpi"><div class="v">${money(totalSpend)}</div><div class="l">всего за ${escapeText(range)}</div></div>
-      <div class="kpi"><div class="v">${counted.length}</div><div class="l">заказов учтено</div></div>
-      <div class="kpi"><div class="v">${money(monthlyAverage)}</div><div class="l">в среднем за месяц</div></div>
-      <div class="kpi"><div class="v">${money(median(sizes))}</div><div class="l">медианный чек</div></div>
-      <div class="kpi"><div class="v">${money(Math.abs(discountTotal))}</div><div class="l">скидок поймано (${discountedItems} позиций)</div></div>
+      <div class="kpi"><div class="v">${money(totalSpend)}</div><div class="l">total for ${escapeText(range)}</div></div>
+      <div class="kpi"><div class="v">${counted.length}</div><div class="l">orders counted</div></div>
+      <div class="kpi"><div class="v">${money(monthlyAverage)}</div><div class="l">per month on average</div></div>
+      <div class="kpi"><div class="v">${money(median(sizes))}</div><div class="l">median order</div></div>
+      <div class="kpi"><div class="v">${money(Math.abs(discountTotal))}</div><div class="l">discounts caught (${discountedItems} items)</div></div>
     </div>
 
     ${notices.length ? `<div class="notice">${notices.join('<br>')}</div>` : ''}
 
     <div class="grid">
       <div class="card wide">
-        <h2>Траты по месяцам</h2>
+        <h2>Spend by month</h2>
         ${columns(months, (value) => Math.round(value))}
-        <p class="hint">Месяц берётся по твоему часовому поясу, а не по UTC.</p>
+        <p class="hint">Months are bucketed in your local timezone, not UTC.</p>
       </div>
 
       <div class="card wide">
-        <h2>Рестораны против продуктов</h2>
+        <h2>Restaurants vs groceries</h2>
         <div class="split">${verticals.map((entry, index) => {
           const share = (entry[1].spend / (totalSpend || 1)) * 100;
           const color = index === 0 ? 'var(--accent)' : 'var(--bar2)';
           return `<div style="width:${share}%;background:${color}">${share >= 12 ? `${Math.round(share)}%` : ''}</div>`;
         }).join('')}</div>
         <div class="legend">${verticals.map((entry, index) => {
-          const label = { FOOD: 'Рестораны', Q_COMMERCE: 'Продукты' }[entry[0]] ?? entry[0];
-          return `<span class="${index === 0 ? 'a' : 'b'}">${escapeText(label)} — ${money(entry[1].spend)}, ${entry[1].count} заказов</span>`;
+          const label = { FOOD: 'Restaurants', Q_COMMERCE: 'Groceries' }[entry[0]] ?? entry[0];
+          return `<span class="${index === 0 ? 'a' : 'b'}">${escapeText(label)} — ${money(entry[1].spend)}, ${entry[1].count} orders</span>`;
         }).join('')}</div>
       </div>
 
       <div class="card">
-        <h2>Топ магазинов по тратам</h2>
+        <h2>Top stores by spend</h2>
         ${bars(stores, money)}
-        <p class="hint">В скобках — количество заказов.</p>
+        <p class="hint">Order count in brackets.</p>
       </div>
 
       <div class="card">
-        <h2>Размер чека</h2>
+        <h2>Order size</h2>
         ${columns(buckets, (value) => value)}
-        <p class="hint">Сколько заказов попало в каждый диапазон, ${currency === 'EUR' ? '€' : currency ?? ''}.</p>
+        <p class="hint">How many orders fall into each band, ${currency === 'EUR' ? '€' : currency ?? ''}.</p>
       </div>
 
       <div class="card wide">
-        <h2>Время заказа</h2>
+        <h2>Time of day</h2>
         ${columns(hours, (value) => (value ? value : ''), { height: 170 })}
-        <p class="hint">Часы местные (${escapeText(Intl.DateTimeFormat().resolvedOptions().timeZone)}). В выгрузке даты в UTC — здесь они уже переведены.</p>
+        <p class="hint">Local hours (${escapeText(Intl.DateTimeFormat().resolvedOptions().timeZone)}). The export stores dates in UTC; they are converted here.</p>
       </div>
 
       <div class="card wide">
-        <h2>Что берёшь чаще всего</h2>
+        <h2>What you order most</h2>
         <select id="store-pick">${storeNames.map((name) => `<option>${escapeText(name)}</option>`).join('')}</select>
         <div id="store-items"></div>
-        <p class="hint">Только внутри одного магазина: у разных магазинов один и тот же товар называется по-разному («Agua Mineral 1,5 L 1 Ud.» и «Agua Mineral, Botella 1,5 L.» — это одна вода), поэтому общий топ по всем магазинам был бы враньём.</p>
+        <p class="hint">Within a single store only: different stores name the same product differently (&laquo;Agua Mineral 1,5 L 1 Ud.&raquo; and &laquo;Agua Mineral, Botella 1,5 L.&raquo; are the same water), so a top list across all stores would be a lie.</p>
       </div>
     </div>
   `;
@@ -434,7 +434,7 @@ function render(file) {
     const name = picker.value;
     const items = new Map();
     for (const order of counted) {
-      if ((order.store?.name ?? 'без названия') !== name) continue;
+      if ((order.store?.name ?? 'unnamed') !== name) continue;
       for (const item of order.items ?? []) {
         if (!item.charged || !item.name) continue;
         const entry = items.get(item.name) ?? { count: 0, spend: 0 };
@@ -448,7 +448,7 @@ function render(file) {
       ? `<table>${top.map(([label, entry]) =>
           `<tr><td>${escapeText(label)}</td><td class="n">${entry.count % 1 ? entry.count.toFixed(1) : entry.count}×</td><td class="n">${money(entry.spend)}</td></tr>`,
         ).join('')}</table>`
-      : '<p class="hint">В этом магазине нет оплаченных позиций.</p>';
+      : '<p class="hint">No charged items in this store.</p>';
   };
   picker.addEventListener('change', renderItems);
   renderItems();
@@ -457,8 +457,8 @@ function render(file) {
   app.hidden = false;
   const foot = $('foot');
   foot.textContent = file.meta
-    ? `Выгрузка от ${(file.meta.exportedAt ?? '').slice(0, 10)} · ${orders.length} заказов в файле · ${file.meta.warnings?.length ?? 0} предупреждений парсера`
-    : `${orders.length} заказов из вашего аккаунта`;
+    ? `Exported ${(file.meta.exportedAt ?? '').slice(0, 10)} · ${orders.length} orders in the file · ${file.meta.warnings?.length ?? 0} parser warnings`
+    : `${orders.length} orders from your account`;
   foot.hidden = false;
 }
 </script>
