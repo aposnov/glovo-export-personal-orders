@@ -101,6 +101,7 @@
   .legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
   .legend .a::before { background: var(--accent); }
   .legend .b::before { background: var(--bar2); }
+  .legend.plain span::before { display: none; }
 
   select { font: inherit; padding: 5px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); margin-bottom: 12px; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -277,6 +278,196 @@ function bars(rows, formatValue) {
   return `<svg viewBox="0 0 ${width} ${height}" role="img">${body.join('')}</svg>`;
 }
 
+const NUTRI_RULES = [
+  [/jab[oó]n|champ[uú]|desodorante|gel de ducha|gel ducha|detergente|lavavajillas|limpiador|quitamanchas|antis[eé]ptico|papel higi[eé]nico|papel.*cocina|bolsa (compostable|reutilizable)|bolsas de basura|discos desmaquillantes|dentinet|vinagre multiusos|micellaire|mr muscle|cillit bang|\bkh-7\b|vanish|wipp/i, { cat: 'Non-food', mode: 'nonfood' }],
+  [/\bcru\b.*(perro|gato|conejo)|barf|men[uú] barf|snack dental perro|puro menu perro/i, { cat: 'Non-food', mode: 'nonfood' }],
+  [/\bagua\b|\baigua\b/i, { cat: 'Water', health: 'neutral', mode: 'unit', kcal: 0, p: 0, f: 0, c: 0 }],
+  [/cerveza.*0[.,]0|0[.,]0.*cerveza/i, { cat: 'Soft drinks', health: 'unhealthy', mode: 'per100ml', kcal: 25, p: 0.3, f: 0, c: 5, defaultMl: 250 }],
+  [/cerveza|\bvino\b/i, { cat: 'Alcohol', health: 'unhealthy', mode: 'per100ml', kcal: 45, p: 0.4, f: 0, c: 3.5, defaultMl: 250 }],
+  [/(coca.?cola|fanta|nestea|refresco|pepsi).*(zero|light|sin az[uú]car)|(zero|light|sin az[uú]car).*(coca.?cola|fanta|nestea|refresco|pepsi)/i, { cat: 'Soft drinks', health: 'neutral', mode: 'per100ml', kcal: 0.3, p: 0, f: 0, c: 0, defaultMl: 330 }],
+  [/coca.?cola|fanta|nestea|dr pepper|refresco/i, { cat: 'Soft drinks', health: 'unhealthy', mode: 'per100ml', kcal: 42, p: 0, f: 0, c: 10.5, defaultMl: 330 }],
+  [/sushi|nigiri|maki|uramaki|gunkan|california roll/i, { cat: 'Cooked meals', health: 'neutral', mode: 'unit', kcal: 300, p: 12, f: 8, c: 40 }],
+  [/mcnuggets|nuggets|mcbites/i, { cat: 'Fast food', health: 'unhealthy', mode: 'unit', kcal: 380, p: 18, f: 23, c: 26 }],
+  [/wagyu burger|burger.*doble|doble.*burger/i, { cat: 'Fast food', health: 'unhealthy', mode: 'unit', kcal: 780, p: 38, f: 45, c: 45 }],
+  [/burger|hamburguesa|cuarto de libra|mcmen[uú]/i, { cat: 'Fast food', health: 'unhealthy', mode: 'unit', kcal: 560, p: 26, f: 30, c: 42 }],
+  [/\bpita\b|kebab|wrap|burrito|lahmacun/i, { cat: 'Fast food', health: 'unhealthy', mode: 'unit', kcal: 520, p: 20, f: 18, c: 58 }],
+  [/subway|\(30 cm\.?\)|b\.m\.t\.|italiano/i, { cat: 'Fast food', health: 'unhealthy', mode: 'unit', kcal: 850, p: 38, f: 28, c: 95 }],
+  [/pasta|spaghett|ravioli|carbonara|bolognese|amatriciana|penne/i, { cat: 'Cooked meals', health: 'neutral', mode: 'unit', kcal: 680, p: 22, f: 24, c: 88 }],
+  [/pizza/i, { cat: 'Fast food', health: 'unhealthy', mode: 'unit', kcal: 280, p: 12, f: 11, c: 33 }],
+  [/ensalada|amanida/i, { cat: 'Fruit & veg', health: 'healthy', mode: 'unit', kcal: 190, p: 6, f: 9, c: 18 }],
+  [/alitas|wings|tender.*ribs/i, { cat: 'Fast food', health: 'unhealthy', mode: 'unit', kcal: 420, p: 28, f: 28, c: 14 }],
+  [/patatas fritas|papas fritas/i, { cat: 'Fast food', health: 'unhealthy', mode: 'unit', kcal: 380, p: 4, f: 19, c: 48 }],
+  [/doritos|pringles|lay'?s|ruffles|patata.*(campesina|ondulada|premium)/i, { cat: 'Snacks', health: 'unhealthy', mode: 'per100g', kcal: 536, p: 6, f: 34, c: 50, defaultG: 150 }],
+  [/yogur|iogurt|skyr|yopro|protein pouch|danone|kaiku/i, { cat: 'Dairy & eggs', health: 'healthy', mode: 'unit', kcal: 130, p: 11, f: 3.5, c: 13 }],
+  [/queso|formatge|mozzarella|gouda|emmental/i, { cat: 'Dairy & eggs', health: 'neutral', mode: 'per100g', kcal: 330, p: 23, f: 26, c: 2, defaultG: 150 }],
+  [/huevo|\bou\b|\bous\b/i, { cat: 'Dairy & eggs', health: 'healthy', mode: 'unit', kcal: 78, p: 6.5, f: 5.3, c: 0.5, qtyFromName: /docena|doc\.|12\s*u|6\s*u/i, qtyDefault: 6 }],
+  [/pollo|pollastre|chicken/i, { cat: 'Meat & fish', health: 'healthy', mode: 'per100g', kcal: 120, p: 22, f: 3, c: 0, defaultG: 150 }],
+  [/salm[oó]n|at[uú]n|tonyina|pescado|anxova|anchoa/i, { cat: 'Meat & fish', health: 'healthy', mode: 'per100g', kcal: 180, p: 20, f: 10, c: 0, defaultG: 100 }],
+  [/jam[oó]n|pavo|pechuga.*lonchas|fiambre|pastrami|mortadel/i, { cat: 'Meat & fish', health: 'neutral', mode: 'per100g', kcal: 150, p: 18, f: 8, c: 1, defaultG: 100 }],
+  [/ternera|vedella|wagyu|\bcarn\b|carne|lomo/i, { cat: 'Meat & fish', health: 'neutral', mode: 'per100g', kcal: 200, p: 20, f: 13, c: 0, defaultG: 150 }],
+  [/baguette|\bpan\b|khachapuri|croissant|milanesa/i, { cat: 'Bread & bakery', health: 'neutral', mode: 'per100g', kcal: 270, p: 9, f: 3, c: 50, defaultG: 200 }],
+  [/almendra|anacardo|cacahuete|nuez|nueces|frutos secos|peanuts/i, { cat: 'Nuts & seeds', health: 'healthy', mode: 'per100g', kcal: 580, p: 20, f: 48, c: 20, defaultG: 150 }],
+  [/deshidratad|desecad|seca en dados|orej[oó]n/i, { cat: 'Fruit & veg', health: 'neutral', mode: 'per100g', kcal: 300, p: 3, f: 0.5, c: 70, defaultG: 150 }],
+  [/aguacate|alvocat/i, { cat: 'Fruit & veg', health: 'healthy', mode: 'per100g', kcal: 160, p: 2, f: 15, c: 9, defaultG: 200 }],
+  [/pl[aá]tano|pl[aà]tan|banana|manzana|naranja|mango|kiwi|uva|ra[iï]m|cirer|cereza|picota|nectarina|pomelo|llim[oó]|\blima\b|papaya|pi[nñ]a\b|frambues|ar[aà]ndan|nabius|m[oò]res|figu/i, { cat: 'Fruit & veg', health: 'healthy', mode: 'per100g', kcal: 55, p: 0.7, f: 0.2, c: 14, defaultG: 250 }],
+  [/tomat|\bceba\b|cebolla|pepino|cogombre|lechuga|cogoll|puerro|perejil|edamame/i, { cat: 'Fruit & veg', health: 'healthy', mode: 'per100g', kcal: 35, p: 1.5, f: 0.3, c: 6, defaultG: 200 }],
+  [/bebida.*avena|leche|\bnata\b|oatly|alpro(?!.*yogur)/i, { cat: 'Milk & drinks', health: 'neutral', mode: 'per100ml', kcal: 45, p: 1, f: 1.5, c: 6, defaultMl: 1000 }],
+  [/caf[eé]|\bt[eé]\b|infusi[oó]|manzanilla/i, { cat: 'Coffee & tea', health: 'neutral', mode: 'unit', kcal: 5, p: 0, f: 0, c: 1 }],
+  [/chocolate|caramel|snickers|m&m|mentos|galleta|helado|donut|tarta|pastel/i, { cat: 'Sweets & bakery', health: 'unhealthy', mode: 'per100g', kcal: 500, p: 6, f: 25, c: 60, defaultG: 100 }],
+];
+
+const HEALTH_LABEL = { healthy: 'Better', neutral: 'Neutral', unhealthy: 'Worse' };
+const HEALTH_COLOR = { healthy: 'var(--accent)', neutral: 'var(--line)', unhealthy: 'var(--bar2)' };
+
+function parseGrams(name) {
+  let match = /(\d+(?:[.,]\d+)?)\s*kg\b/i.exec(name);
+  if (match) return parseFloat(match[1].replace(',', '.')) * 1000;
+  match = /(\d+(?:[.,]\d+)?)\s*(?:g|gr|grs?|gramos)\b/i.exec(name);
+  if (match) return parseFloat(match[1].replace(',', '.'));
+  return null;
+}
+
+function parseMl(name) {
+  let match = /(\d+(?:[.,]\d+)?)\s*(?:l|litro|litros)\b/i.exec(name);
+  if (match) return parseFloat(match[1].replace(',', '.')) * 1000;
+  match = /(\d+(?:[.,]\d+)?)\s*cl\b/i.exec(name);
+  if (match) return parseFloat(match[1].replace(',', '.')) * 10;
+  match = /(\d+(?:[.,]\d+)?)\s*ml\b/i.exec(name);
+  if (match) return parseFloat(match[1].replace(',', '.'));
+  return null;
+}
+
+function scalePer100(spec, amount) {
+  const factor = amount / 100;
+  return { kcal: spec.kcal * factor, p: spec.p * factor, f: spec.f * factor, c: spec.c * factor };
+}
+
+function classifyItem(name) {
+  for (const [pattern, spec] of NUTRI_RULES) {
+    if (pattern.test(name)) return spec;
+  }
+  return null;
+}
+
+function itemMacro(spec, name) {
+  if (spec.mode === 'unit') {
+    const units = spec.qtyFromName ? (spec.qtyFromName.test(name) ? spec.qtyDefault : 1) : 1;
+    return { kcal: spec.kcal * units, p: spec.p * units, f: spec.f * units, c: spec.c * units };
+  }
+  if (spec.mode === 'per100g') return scalePer100(spec, parseGrams(name) ?? spec.defaultG);
+  if (spec.mode === 'per100ml') return scalePer100(spec, parseMl(name) ?? spec.defaultMl);
+  return { kcal: 0, p: 0, f: 0, c: 0 };
+}
+
+function estimateNutrition(orders) {
+  const byCategory = new Map();
+  const byHealth = { healthy: 0, neutral: 0, unhealthy: 0 };
+  const monthMap = new Map();
+  let totalKcal = 0;
+  let protein = 0;
+  let fat = 0;
+  let carbs = 0;
+  let matched = 0;
+  let unmatched = 0;
+  let nonfood = 0;
+  let ordersWithFood = 0;
+
+  for (const order of orders) {
+    let orderKcal = 0;
+    let hasFood = false;
+    for (const item of order.items ?? []) {
+      if (!item.charged || !item.name) continue;
+      const quantity = item.quantity ?? 1;
+      const spec = classifyItem(item.name);
+      if (!spec) { unmatched += quantity; continue; }
+      if (spec.mode === 'nonfood') { nonfood += quantity; continue; }
+      const macro = itemMacro(spec, item.name);
+      matched += quantity;
+      hasFood = true;
+      orderKcal += macro.kcal * quantity;
+      protein += macro.p * quantity;
+      fat += macro.f * quantity;
+      carbs += macro.c * quantity;
+      byHealth[spec.health] += quantity;
+      const entry = byCategory.get(spec.cat) ?? { items: 0, kcal: 0 };
+      entry.items += quantity;
+      entry.kcal += macro.kcal * quantity;
+      byCategory.set(spec.cat, entry);
+    }
+    if (!hasFood) continue;
+    ordersWithFood += 1;
+    totalKcal += orderKcal;
+    const parts = localParts(order.date);
+    if (!parts) continue;
+    const bucket = monthMap.get(parts.month) ?? { kcal: 0, orders: 0 };
+    bucket.kcal += orderKcal;
+    bucket.orders += 1;
+    monthMap.set(parts.month, bucket);
+  }
+
+  const monthly = [...monthMap.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([key, bucket]) => ({ label: key.slice(2).replace('-', '.'), value: bucket.kcal / bucket.orders }));
+  const categories = [...byCategory.entries()].sort((a, b) => b[1].kcal - a[1].kcal);
+  const foodItems = matched + unmatched;
+
+  return {
+    totalKcal,
+    protein,
+    fat,
+    carbs,
+    matched,
+    unmatched,
+    nonfood,
+    ordersWithFood,
+    coverage: foodItems ? matched / foodItems : 0,
+    avgKcal: ordersWithFood ? totalKcal / ordersWithFood : 0,
+    byHealth,
+    categories,
+    monthly,
+  };
+}
+
+function nutritionCards(nutrition) {
+  if (!nutrition.matched) return '';
+  const kcal = (value) => `${Math.round(value).toLocaleString()} kcal`;
+  const healthTotal = nutrition.byHealth.healthy + nutrition.byHealth.neutral + nutrition.byHealth.unhealthy;
+  const healthKeys = ['healthy', 'neutral', 'unhealthy'];
+
+  return `
+      <div class="card wide">
+        <h2>Estimated calories</h2>
+        <div class="kpis">
+          <div class="kpi"><div class="v">${kcal(nutrition.avgKcal)}</div><div class="l">per order on average</div></div>
+          <div class="kpi"><div class="v">${kcal(nutrition.totalKcal)}</div><div class="l">recognised in total</div></div>
+          <div class="kpi"><div class="v">${Math.round(nutrition.coverage * 100)}%</div><div class="l">of food items recognised</div></div>
+          <div class="kpi"><div class="v">${Math.round(nutrition.protein)} / ${Math.round(nutrition.fat)} / ${Math.round(nutrition.carbs)} g</div><div class="l">protein / fat / carbs</div></div>
+        </div>
+        ${nutrition.monthly.length ? columns(nutrition.monthly, (value) => Math.round(value)) : ''}
+        <p class="hint">Average kcal per order per month. <b>This is a guess from item names</b> — no nutrition database is consulted. ${nutrition.unmatched ? `${Math.round(nutrition.unmatched)} items matched no rule and count as zero, so every number here is a floor, not a total.` : ''} Restaurant portions vary wildly; treat it as an order of magnitude.</p>
+      </div>
+
+      <div class="card">
+        <h2>Better vs worse</h2>
+        <div class="split">${healthKeys.map((key) => {
+          const share = (nutrition.byHealth[key] / (healthTotal || 1)) * 100;
+          return `<div style="width:${share}%;background:${HEALTH_COLOR[key]};color:${key === 'neutral' ? 'var(--ink)' : '#fff'}">${share >= 12 ? `${Math.round(share)}%` : ''}</div>`;
+        }).join('')}</div>
+        <div class="legend plain">${healthKeys.map((key) =>
+          `<span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;background:${HEALTH_COLOR[key]}"></i>${HEALTH_LABEL[key]} — ${Math.round(nutrition.byHealth[key])} items</span>`,
+        ).join('')}</div>
+        <p class="hint">Fruit, veg, fish, poultry, eggs and yoghurt count as better; alcohol, soft drinks, sweets, crisps and fast food as worse; everything else is neutral. ${nutrition.nonfood ? `${Math.round(nutrition.nonfood)} non-food items (cleaning, pet food) are excluded.` : ''}</p>
+      </div>
+
+      <div class="card">
+        <h2>Calories by category</h2>
+        <table>${nutrition.categories.map(([name, entry]) =>
+          `<tr><td>${escapeText(name)}</td><td class="n">${Math.round(entry.items)}×</td><td class="n">${kcal(entry.kcal)}</td></tr>`,
+        ).join('')}</table>
+        <p class="hint">Categories come from the same keyword rules, so an unrecognised item lands in no category at all.</p>
+      </div>
+`;
+}
+
 function render(file) {
   const orders = file.orders;
   const currency = orders.find((order) => order.currency)?.currency ?? null;
@@ -369,6 +560,8 @@ function render(file) {
     notices.push(`In <b>${mismatches}</b> orders the item sum disagrees with the PRODUCTS line — normal for groceries, where the basket changes after picking. Totals are unaffected.`);
   }
 
+  const nutrition = estimateNutrition(counted);
+
   const storeNames = [...byStore.keys()].sort((a, b) => byStore.get(b).count - byStore.get(a).count);
 
   app.innerHTML = `
@@ -426,6 +619,7 @@ function render(file) {
         <div id="store-items"></div>
         <p class="hint">Within a single store only: different stores name the same product differently (&laquo;Agua Mineral 1,5 L 1 Ud.&raquo; and &laquo;Agua Mineral, Botella 1,5 L.&raquo; are the same water), so a top list across all stores would be a lie.</p>
       </div>
+${nutritionCards(nutrition)}
     </div>
   `;
 

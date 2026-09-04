@@ -137,7 +137,15 @@ The repo ships `viewer.html` — a single file, no dependencies, no build.
 open viewer.html      # macOS; xdg-open on Linux; on Windows just double-click
 ```
 
-Drop your exported JSON onto the window. It computes: spend by month, restaurants vs groceries, top stores by spend, order size, time of day, and what you order most.
+Drop your exported JSON onto the window. It computes: spend by month, restaurants vs groceries, top stores by spend, order size, time of day, what you order most, and a rough calorie estimate.
+
+### Calories — a guess, not a measurement
+
+The last three cards estimate kcal, protein/fat/carbs, a better/worse split and a category breakdown. There is **no nutrition database behind it** and none is called: every number comes from keyword rules over the item name (`pollo` → 120 kcal/100 g, `pizza` → 280 kcal per unit, `cerveza` → 45 kcal/100 ml), with grams and millilitres parsed out of the name (`500 g`, `1,5 L`, `33 cl`) and a per-rule default when the name carries no amount.
+
+So: items that match no rule count as **zero**, which is why the card shows how many items were recognised — the totals are a floor, not a total. Non-food lines (cleaning, pet food) are detected and excluded. Restaurant portions vary wildly. Read it as an order of magnitude, nothing more.
+
+The rules are Spanish/Catalan keywords, matching the markets where Glovo operates. They are a plain array at the top of the `<script>` block in `viewer.html` — edit them for your own basket.
 
 The page issues **zero network requests** — the file is read through `FileReader` and everything is computed in the browser. Verify it yourself: open the Network tab in devtools and drop the file.
 
