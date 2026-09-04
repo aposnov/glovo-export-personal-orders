@@ -1,7 +1,7 @@
 {
   "name": "glovo-export",
   "version": "1.0.0",
-  "description": "Выгрузка истории заказов Glovo в JSON — локально, через собственный браузер",
+  "description": "Export your Glovo order history to JSON — locally, in your own browser",
   "license": "MIT",
   "type": "module",
   "scripts": {

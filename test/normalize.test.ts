@@ -39,7 +39,7 @@ test('parseTimestamp converts epoch ms and rejects null', () => {
 });
 
 test('stripHtml removes markup from shortSummary', () => {
-  assert.equal(stripHtml('20 products from <b>Sorli</b>'), '20 products from Sorli');
+  assert.equal(stripHtml('20 products from <b>Some Store</b>'), '20 products from Some Store');
   assert.equal(stripHtml(null), null);
 });
 

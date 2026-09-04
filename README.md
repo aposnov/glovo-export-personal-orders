@@ -1,105 +1,107 @@
 # glovo-export
 
-Локальная CLI-утилита: выгружает историю твоих заказов Glovo в нормализованный JSON.
+**English** · [Русский](README_RU.md)
 
-## Зачем
+A local CLI that exports your Glovo order history into normalized JSON.
 
-В интерфейсе Glovo историю заказов нельзя ни отфильтровать, ни выгрузить. Данные при этом лежат за нормальным JSON API — их надо просто собрать, привести к числам и посчитать. JSON на выходе рассчитан на то, чтобы поверх него потом построить графики.
+## Why
 
-## Как это работает
+Glovo's own interface lets you neither filter nor export your order history. The data does sit behind a perfectly ordinary JSON API — it just has to be collected, turned into numbers and added up. The JSON this tool writes is shaped so charts can be built on top of it.
 
-Ключевое решение: **все запросы к API выполняются внутри страницы**, через `page.evaluate` на `https://glovoapp.com`. Node оркеструет процесс, но токен не видит никогда.
+## How it works
+
+The key decision: **every API call runs inside the page**, via `page.evaluate` on `https://glovoapp.com`. Node orchestrates the run but never sees the token.
 
 ```
-Node (tsx)                     Chromium (профиль Playwright)
+Node (tsx)                     Chromium (Playwright profile)
   |                              |
-  |-- page.evaluate(fetch) ----->|  читает cookie glovo_auth_info
+  |-- page.evaluate(fetch) ----->|  reads the glovo_auth_info cookie
   |                              |  fetch -> api.glovoapp.com
   |<---------- JSON -------------|
   |
-  нормализация -> валидация -> out/*.json
+  normalize -> validate -> out/*.json
 ```
 
-Это одним решением закрывает сразу четыре проблемы:
+That one decision closes four problems at once:
 
-- **CORS.** API пускает только origin `https://glovoapp.com` (точное совпадение, даже `www` не подходит). Запрос со страницы этого же домена проходит по определению.
-- **Токен живёт 20 минут.** Cookie читается заново перед каждым запросом, поэтому протухнуть посреди выгрузки нечему.
-- **Refresh-токен не трогаем.** `POST /oauth/refresh` не вызывается, ротацией занимается сама страница. При `401` мы просто перезагружаем страницу и повторяем запрос.
-- **Безопасность.** Токен не попадает ни в память Node, ни на диск, ни в логи.
+- **CORS.** The API accepts only the exact origin `https://glovoapp.com` — not even `www` passes. A request from a page on that same domain is same-origin by definition.
+- **The token lives ~20 minutes.** The cookie is re-read before every request, so there is nothing to expire mid-export.
+- **The refresh token is never touched.** `POST /oauth/refresh` is never called; the page handles rotation itself. On a `401` we simply reload the page and retry.
+- **Safety.** The token never reaches Node's memory, the disk, or the logs.
 
-Авторизацию выполняет человек — руками, в открытом окне браузера (на странице логина есть reCAPTCHA, и автоматизировать это не нужно). Сессия сохраняется в постоянном профиле Playwright `~/.glovo-export/profile`, поэтому логиниться заново при каждой выгрузке не требуется.
+**You log in yourself**, by hand, in a visible browser window (the login page carries a reCAPTCHA, and automating it is neither needed nor attempted). The session is kept in a persistent Playwright profile at `~/.glovo-export/profile`, so you don't log in again for every export.
 
-### Сбор заказов
+### Collecting orders
 
-1. `GET /v3/customer/orders-list?offset=<cursor>&limit=50` — курсорная пагинация. Важно: `offset` это **id следующего заказа**, а не номер строки.
-2. Список — «презентационный»: в нём нет ни дат, ни цен по позициям. Поэтому по каждому заказу нужен отдельный запрос `GET /v3/customer/orders/{id}`.
-3. Заказы отсортированы от новых к старым, id монотонны — значит детали тянем сверху вниз и останавливаемся после **3 подряд** заказов вне запрошенного диапазона (три, а не один, чтобы единичная аномалия не обрезала выгрузку).
+1. `GET /v3/customer/orders-list?offset=<cursor>&limit=50` — cursor pagination. Important: `offset` is **the id of the next order**, not a row number.
+2. The list is presentational: it carries neither dates nor per-item prices. So every order needs its own `GET /v3/customer/orders/{id}`.
+3. Orders come newest-first and ids are monotonic, so details are fetched top-down and the walk stops after **3 consecutive** orders outside the requested range (three, not one, so a single anomaly can't truncate the export).
 
-Темп: 750 мс между страницами списка, 1000 мс между заказами. Ретраев максимум 5. На `429` — пауза `min(15000 * 2^попытка, 120000)` мс, на `5xx` — `min(1000 * 2^попытка, 30000)` мс.
+Pacing: 750 ms between list pages, 1000 ms between orders. At most 5 retries. On `429` back off `min(15000 * 2^attempt, 120000)` ms, on `5xx` `min(1000 * 2^attempt, 30000)` ms.
 
-### Нормализация — самая ответственная часть
+### Normalization — the part that carries the weight
 
-Каждое правило ниже получено измерением на живых данных, а не из документации:
+Every rule below was measured against live data, not taken from documentation:
 
-| Поле | Правило |
+| Field | Rule |
 |---|---|
-| Дата | Берём `currentStatus.creationTime` (epoch ms). Поле `creationTime` в корне **всегда `null`** — читать его нельзя |
-| Деньги | `"12,00 €"`, `"8,34 EUR"`, `"No cost"` → число. Запятая как десятичный разделитель, `"No cost"` = 0. Не распарсилось → `null` **и предупреждение**, никогда не молчаливый `0` |
-| Цена позиции | `price` — это сумма по строке, **не цена за штуку**. Умножать на количество нельзя. `unitPrice` считаем отдельно |
-| Неоплаченные позиции | Строки с `displayStyle === "STRIKETHROUGH"` (товара не оказалось) несут ненулевую цену, которую никто не платил. Из сумм исключаем, но в выгрузке оставляем с `charged: false` |
-| Скидки | `price` уже с учётом промо. Сохраняем `originalLineTotal` (из `originalPrice`) и `discount` — отрицательное число. Если `promotionDescription` содержит сумму (`"-2,50 €"`), берём её; иначе считаем как `price - originalPrice`. Промо вида `"-20%"` или `"2x1"` суммой не являются — их не парсим |
-| Отменённые | Отмену читаем из `currentStatus.type` (`CanceledStatus`), а не только из `recentlyCancelled` — второе поле значит «отменён недавно» и на старых заказах пустое. У отменённых `TOTAL` отсутствует, поэтому они помечаются `excludedFromSpend: "cancelled"` и в сумму не идут |
-| Возвраты | `refunded` помечаем, но сумму **оставляем в тратах**: API не сообщает, сколько именно вернули, а `TOTAL` — это то, что реально списали. В отчёте возвраты показываются отдельной строкой, а не вычитаются молча |
+| Date | Use `currentStatus.creationTime` (epoch ms). The root-level `creationTime` is **always `null`** — never read it |
+| Money | `"12,00 €"`, `"8,34 EUR"`, `"No cost"` → number. Comma is the decimal separator, `"No cost"` is 0. Unparseable → `null` **plus a warning**, never a silent `0` |
+| Item price | `price` is the **line total, not the unit price**. Do not multiply by quantity. `unitPrice` is derived separately |
+| Uncharged items | Lines with `displayStyle === "STRIKETHROUGH"` (out of stock) still carry a non-zero price nobody paid. They are excluded from the totals but kept in the export with `charged: false` |
+| Discounts | `price` is already post-promotion. `originalLineTotal` (from `originalPrice`) and `discount` (a negative number) are preserved. If `promotionDescription` holds an amount (`"-2,50 €"`) that is used; otherwise the discount is `price - originalPrice`. Labels like `"-20%"` or `"2x1"` are not amounts and are not parsed |
+| Cancellations | Read from `currentStatus.type` (`CanceledStatus`), not only from `recentlyCancelled` — that second field means "cancelled recently" and is empty on old orders. Cancelled orders have no `TOTAL`, so they are marked `excludedFromSpend: "cancelled"` and left out of the sums |
+| Refunds | `refunded` is flagged, but the amount **stays in spend**: the API never says how much was returned, and `TOTAL` is what was actually charged. Refunds are reported on their own line rather than silently subtracted |
 
-Определять «не оплачено» нужно строго по `displayStyle`, а не по тексту `notice` — текст локализованный.
+"Not charged" must be decided strictly by `displayStyle`, never by the `notice` text — that text is localized.
 
-**Персональные данные вырезаются всегда**: `points[]` (точка `DELIVERY` — это домашний адрес, самое чувствительное поле во всём ответе), блок `PAYMENT` (последние 4 цифры карты), HTML-теги из `shortSummary`. Для графиков ничего из этого не нужно.
+**Personal data is always stripped**: `points[]` (the `DELIVERY` point is your home address, the most sensitive field in the whole response), the `PAYMENT` block (card last-4), and HTML tags in `shortSummary`. None of it is needed for charts.
 
-### Валидация
+### Validation
 
-По каждому заказу проверяем: `сумма оплаченных позиций ≈ строка PRODUCTS` (допуск 1 цент). Результат кладём в `validation.productsMatch` и `validation.delta`.
+For each order: `sum of charged items ≈ the PRODUCTS line` (1 cent tolerance). The result goes into `validation.productsMatch` and `validation.delta`.
 
-Важно понимать, что это значит на практике. Расхождения — **нормальное свойство данных Glovo**, а не баг парсера: в продуктовых заказах позиции меняются уже после сборки (`notice` прямо называет причины: `"Price change"`, `"Product added"`, `"Not available"`). На реальной выгрузке разошлись 36 заказов из 168, отклонения от −1,35 € до +8,29 € в обе стороны. Скрытого поля с фактически списанной ценой позиции в ответе нет — проверено по полному списку полей.
+What that means in practice matters. Mismatches are a **normal property of Glovo's data**, not a parser bug: in grocery orders items change after picking, and `notice` names the reasons outright — `"Price change"`, `"Product added"`, `"Not available"`. On a real 168-order export, 36 orders disagreed, from −1.35 € to +8.29 € in both directions. There is no hidden field holding the actually-charged item price — verified against the full field list.
 
-Поэтому: **`PRODUCTS` и `TOTAL` — источник истины**, это то, что реально списали. Итоговая сумма трат считается по `totals.total` и верна. А `productsMatch` читается как флаг качества данных для графиков по позициям.
+So: **`PRODUCTS` and `TOTAL` are the source of truth**, because they are what was actually charged. Total spend is computed from `totals.total` and is correct. `productsMatch` reads as a data-quality flag for item-level charts.
 
-## Что используем
+## Stack
 
-- **TypeScript** + **tsx** (без сборки)
-- **Playwright** — единственная runtime-зависимость, нужна ради `launchPersistentContext`
-- Разбор аргументов — встроенный `node:util` `parseArgs`, тесты — встроенный `node:test`
+- **TypeScript** + **tsx** (no build step)
+- **Playwright** — the only runtime dependency, needed for `launchPersistentContext`
+- Argument parsing is the built-in `node:util` `parseArgs`; tests are the built-in `node:test`
 
-Больше ничего. Общее ядро лежит в `src/core/` (`normalize.ts` + `types.ts`): ни одного runtime-импорта и ни одного node-builtin, поэтому тот же код запускается и в Node, и в браузере. Ядро чистое: фикстуры на вход, объекты на выход, без сети — тестируется без браузера.
+Nothing else. The shared core lives in `src/core/` (`normalize.ts` + `types.ts`): zero runtime imports and zero node builtins, so the same code runs in Node and in a browser. The core is pure — fixtures in, objects out, no network — and is tested without a browser.
 
-## Установка
+## Install
 
 ```bash
 npm install
 npx playwright install chromium
 ```
 
-## Использование
+## Usage
 
 ```bash
 npm run login
 ```
 
-Откроется окно браузера. Логинишься сам. После входа команда печатает claims токена (`userId`, `grantType`, `role`, срок действия) — чтобы убедиться, что это нужный аккаунт.
+A browser window opens. You log in yourself. Afterwards the command prints the token's claims (`userId`, `grantType`, `role`, expiry) so you can confirm it is the account you meant.
 
 ```bash
 npm run export -- --from 2025-01-01 --to 2026-12-31
 ```
 
-Флаги: `--out <путь>` (по умолчанию `out/glovo-orders-<год>-<год>.json`), `--expect-user <id>` — не запускать выгрузку, если в сессии другой аккаунт.
+Flags: `--out <path>` (default `out/glovo-orders-<year>-<year>.json`), `--expect-user <id>` — refuse to run if the session belongs to a different account.
 
-Проверка кода:
+Checks:
 
 ```bash
 npm test
 npm run typecheck
 ```
 
-## Формат выгрузки
+## Export format
 
 ```json
 {
@@ -120,43 +122,42 @@ npm run typecheck
 }
 ```
 
-## Ограничения
+## Limitations
 
-- Выгружается история **того аккаунта, под которым вошли**. Если заказы разнесены по нескольким аккаунтам (например, вход по паролю и вход через Google), придётся выгружать каждый отдельно и склеивать по `id`.
-- `--expect-user` сверяет `userId` из токена. В текущем формате токена claims верхнего уровня — это `role` / `payload` / `jti`, а сам `userId` лежит внутри `payload`, поэтому он распаковывается отдельно. Если в токене `userId` не найдётся вообще, флаг честно откажется запускать выгрузку, вместо того чтобы делать вид, что проверил.
-- `out/` в `.gitignore` — это персональные данные, в репозиторий они не попадают.
+- It exports the history of **the account you logged in as**. If your orders are spread over several accounts (say, a password login and a Google login), export each one separately and merge on `id`.
+- `--expect-user` compares the `userId` from the token. In the current token format the top-level claims are `role` / `payload` / `jti`, and `userId` sits inside `payload`, so it is unpacked separately. If no `userId` is found at all, the flag refuses to run rather than pretending it checked.
+- A refund is flagged as `refunded`, but the API never reports the refunded amount — so no number is invented: spend keeps what was actually charged (`TOTAL`), and refunds are reported on a separate line.
+- `out/` is in `.gitignore` — it is personal data and does not belong in a repository.
 
-- Возврат помечается флагом `refunded`, но точную сумму возврата API не сообщает — поэтому она не выдумывается: в тратах остаётся то, что реально списали (`TOTAL`), а возвраты показываются отдельной строкой.
+## Charts, offline
 
-## Графики без интернета
-
-В репозитории лежит `viewer.html` — один файл, без зависимостей и без сборки.
+The repo ships `viewer.html` — a single file, no dependencies, no build.
 
 ```bash
-open viewer.html      # macOS; на Linux — xdg-open, на Windows — просто двойной клик
+open viewer.html      # macOS; xdg-open on Linux; on Windows just double-click
 ```
 
-Перетащи в окно выгруженный JSON. Посчитаются: траты по месяцам, рестораны против магазинов, топ заведений, размер чека, время заказа, что берёшь чаще всего.
+Drop your exported JSON onto the window. It computes: spend by month, restaurants vs grocery, top stores, order size, time of day, and what you order most often.
 
-Страница не делает ни одного сетевого запроса — файл читается через `FileReader`, всё считается в браузере. Проверить можно самому: открой вкладку Network в devtools и перетащи файл.
+The page issues **zero network requests** — the file is read through `FileReader` and everything is computed in the browser. Verify it yourself: open the Network tab in devtools and drop the file.
 
-## Приватность
+## Privacy
 
-- **Данные не покидают компьютер.** Ни выгрузка, ни `viewer.html` никуда ничего не отправляют. Никакого сервера у этой утилиты нет.
-- **Токен не попадает в Node.** Все запросы к API идут внутри страницы через `page.evaluate`; cookie читает браузер, а не наш процесс. На диск и в логи токен не пишется.
-- **Refresh-токен не трогаем вообще.**
-- **Адрес и карта вырезаются на этапе нормализации** — `points[]` и блок `PAYMENT` в выгрузку не попадают.
-- **`~/.glovo-export/profile` — это живая сессия Glovo.** Папку нельзя копировать, класть в облако или кому-то передавать: у того, кто её получит, будет доступ к аккаунту. Чтобы её убить, достаточно удалить папку.
-- Выгрузка (`out/*.json`) — персональные данные. `.gitignore` их уже закрывает, но следи за тем, куда кладёшь файл.
+- **Data never leaves your machine.** Neither the export nor `viewer.html` sends anything anywhere. This tool has no server.
+- **The token never enters Node.** All API calls run inside the page via `page.evaluate`; the cookie is read by the browser, not by our process. The token is written neither to disk nor to logs.
+- **The refresh token is never touched.**
+- **Address and card are stripped during normalization** — `points[]` and the `PAYMENT` block never reach the export.
+- **`~/.glovo-export/profile` is a live Glovo session.** Never copy it, sync it to the cloud, or hand it to anyone: whoever holds that folder holds your account. Deleting the folder kills the session.
+- The export (`out/*.json`) is personal data. `.gitignore` already covers it, but mind where you put the file.
 
-## Лицензия
+## License
 
-MIT — см. [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
 
-## Дисклеймер
+## Disclaimer
 
-Проект не связан с Glovo, не аффилирован с компанией и не одобрен ею. «Glovo» и логотипы принадлежат правообладателям.
+This project is not affiliated with, associated with, or endorsed by Glovo. "Glovo" and its logos belong to their respective owners.
 
-Утилита работает **на твоей машине, под твоей же сессией**, и читает только твои собственные заказы — как если бы ты открыл историю в браузере и переписал её вручную. Никакой третьей стороне доступ не передаётся (п. 2.2 условий Glovo — про передачу доступа к аккаунту третьим лицам). Решение пользоваться утилитой — твоё; ответственность за это тоже.
+The tool runs **on your machine, under your own session**, and reads only your own orders — the same thing you would get by opening your order history in a browser and copying it out by hand. No access is handed to any third party (Glovo's terms §2.2 is about giving third parties access to your account). Using it is your call, and so is the responsibility for that.
 
-Данные берутся из внутреннего API Glovo, который никем не задокументирован и может измениться в любой момент. Тогда парсер сломается — это ожидаемое свойство такого инструмента.
+The data comes from Glovo's internal API, which is undocumented and can change at any moment. When it does, the parser breaks — that is an expected property of a tool like this.

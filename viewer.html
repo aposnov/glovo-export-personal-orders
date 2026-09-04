@@ -424,7 +424,7 @@ function render(file) {
         <h2>Что берёшь чаще всего</h2>
         <select id="store-pick">${storeNames.map((name) => `<option>${escapeText(name)}</option>`).join('')}</select>
         <div id="store-items"></div>
-        <p class="hint">Только внутри одного магазина: у разных магазинов один и тот же товар называется по-разному («Agua Bezoya Mineral 1,5 L 1 Ud.» и «Agua Mineral Bezoya, Botella 1,5 L.» — это одна вода), поэтому общий топ по всем магазинам был бы враньём.</p>
+        <p class="hint">Только внутри одного магазина: у разных магазинов один и тот же товар называется по-разному («Agua Mineral 1,5 L 1 Ud.» и «Agua Mineral, Botella 1,5 L.» — это одна вода), поэтому общий топ по всем магазинам был бы враньём.</p>
       </div>
     </div>
   `;
