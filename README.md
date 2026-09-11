@@ -2,11 +2,13 @@
 
 **English** · [Русский](README_RU.md)
 
-A local CLI that exports your Glovo order history into normalized JSON.
+A local CLI that exports your Glovo and Amazon order history into normalized JSON.
 
 ## Why
 
 Glovo's own interface lets you neither filter nor export your order history. The data does sit behind a perfectly ordinary JSON API — it just has to be collected, turned into numbers and added up. The JSON this tool writes is shaped so charts can be built on top of it.
+
+Amazon is the same story with a worse API: there is none for customers, only the order-history pages. So the [Amazon part](#amazon) reads those pages — in your own browser, under your own session — and writes the same JSON shape.
 
 ## How it works
 
@@ -73,6 +75,8 @@ So: **`PRODUCTS` and `TOTAL` are the source of truth**, because they are what wa
 
 Nothing else. The shared core lives in `src/core/` (`normalize.ts` + `types.ts`): zero runtime imports and zero node builtins, so the same code runs in Node and in a browser. The core is pure — fixtures in, objects out, no network — and is tested without a browser.
 
+The Amazon reader lives in `src/amazon/`: `extract.ts` holds the functions that run inside the page, `locale.ts` the Spanish/English label tables, `normalize.ts` the mapping onto the shared order shape. The extractors are tested against synthetic HTML fixtures in a real Chromium; everything else without one.
+
 ## Install
 
 ```bash
@@ -101,11 +105,52 @@ npm test
 npm run typecheck
 ```
 
+## Amazon
+
+Amazon offers customers no order-history API, so this part is a **page reader**. It opens your order history in its own persistent Chromium, one page at a time, and reads the fields off the rendered HTML. The reading code runs *inside the page* (`page.evaluate`) and returns named fields only — ids, dates, amounts, titles, ASINs, quantities, seller names, status text. Node never receives the page itself.
+
+```bash
+npm run amazon:login                                          # sign in yourself in the window that opens
+npm run amazon:probe                                          # loads one list page, prints counts only
+npm run amazon:export -- --from 2025-01-01 --to 2025-12-31
+```
+
+Flags: `--marketplace amazon.es` (default; any `amazon.<tld>`), `--out <path>` (default `out/amazon-orders-<year>-<year>.json`), `--headless` (export only; off by default, see below). Run `amazon:probe` once before the first export: it tells you whether the session is alive, which language the pages come in, and whether every card on the page yielded an id, a date and a total.
+
+### How it reads
+
+- `/your-orders/orders?timeFilter=year-YYYY&page=N` for every year in the range, then `/your-orders/order-details?orderID=…` for every order dated inside it. One tab, sequential: 1 s between list pages, 1.5 s between orders. Three hundred orders take about ten minutes.
+- **Headed on purpose.** Amazon may ask you to sign in again or show a check at any moment. After every page load the tool looks for the known challenge markers; on a hit it prints a message and waits up to five minutes for *you* to solve it in the window, then carries on. Nothing is ever solved, proxied or spoofed by the tool. `--headless` is for a session you already trust.
+- **Localized pages.** `?language=en_US` is ignored on amazon.es (the site's own language cookie wins), so nothing is matched by position — every label goes through tables for Spanish and English in `src/amazon/locale.ts`: card headers, charge-summary rows (`Subtotal de producto(s)` / `Items`, `Envío` / `Postage`, `Importe total` / `Grand Total`, …), `Vendido por:` / `Sold by:`, cancellation and refund words, month names. Another language yields an `unsupported_locale` warning with the raw strings kept; adding a language is adding a table.
+- **Same JSON shape as Glovo.** `store` is the seller (`Amazon` for first-party sales, the seller's id and name otherwise); `items[].asin` is added; `vertical` is `null`; `date` is a plain `YYYY-MM-DD`, because Amazon shows no time of day. `totals.products` / `delivery` / `total` come from the charge summary, `validation.productsMatch` compares `unitPrice × quantity` against the items subtotal with the same 1-cent tolerance.
+
+### Never stored
+
+The order page shows your name, shipping address, payment method, card digits and invoice links. **None of it reaches the export, and none of it reaches Node.** The list extractor skips the `Ship to` block outright; the detail extractor reads the charge rows and the item grid and never enters the box that holds the address, the buyer and the payment widget.
+
+That is not a promise but a test: `test/amazon-extract.test.ts` loads a synthetic detail page that *deliberately contains* a fake name, street, `•••• 4242` and an invoice link, runs the real extractor on it in Chromium, and asserts that none of those strings survive. Verify your own first export without opening it:
+
+```bash
+grep -ciE 'enviar a|ship to|calle|street|visa|mastercard|••••|método de pago|payment' out/amazon-orders-*.json
+```
+
+Expect `0`.
+
+`~/.glovo-export/amazon-profile` is a live Amazon session — the same rule as for the Glovo profile: never copy it, sync it or hand it over. Deleting the folder ends the session.
+
+### Limitations
+
+- Only what the order pages show. Orders without a detail page (digital purchases, some very old ones) are exported from the list card alone, with a `detail_unavailable` warning and items without prices.
+- Archived orders are not read. Returns and refund amounts are unknown — `refunded` is a flag, spend keeps what was charged.
+- `status` is the page's own text (`Entregado el 14 de marzo`, `Delivered 14 March`); it is kept as is. An order is `cancelled` only when every shipment says so; a partly cancelled one stays in spend with a `partial_cancellation` warning.
+- Amazon changes its markup without notice. When a card yields no id or an unknown header label, the export warns (`missing_order_id`, `unmatched_header_label`) rather than guessing.
+
 ## Export format
 
 ```json
 {
   "meta": {
+    "source": "glovo",
     "exportedAt", "accountUserId", "grantType", "accountRole",
     "range", "ordersSeen", "ordersExported", "requestCount", "warnings": []
   },
@@ -121,6 +166,8 @@ npm run typecheck
   }]
 }
 ```
+
+An Amazon export has `"source": "amazon"` and, instead of the account claims and `requestCount`, `marketplace` and `pagesLoaded`; its items carry an extra `asin`. Files without `source` are Glovo exports from before the field existed.
 
 ## Limitations
 
@@ -139,6 +186,8 @@ open viewer.html      # macOS; xdg-open on Linux; on Windows just double-click
 
 Drop your exported JSON onto the window. It computes: spend by month, restaurants vs groceries, top stores by spend, order size, time of day, what you order most, and a rough calorie estimate.
 
+An Amazon export gets the same page with different splits: Amazon vs third-party sellers, top sellers by spend, what you buy most per seller. Time of day and the calorie cards are hidden — Amazon dates carry no time, and the calorie rules are grocery names.
+
 ### Calories — a guess, not a measurement
 
 The last three cards estimate kcal, protein/fat/carbs, a better/worse split and a category breakdown. There is **no nutrition database behind it** and none is called: every number comes from keyword rules over the item name (`pollo` → 120 kcal/100 g, `pizza` → 280 kcal per unit, `cerveza` → 45 kcal/100 ml), with grams and millilitres parsed out of the name (`500 g`, `1,5 L`, `33 cl`) and a per-rule default when the name carries no amount.
@@ -155,7 +204,8 @@ The page issues **zero network requests** — the file is read through `FileRead
 - **The token never enters Node.** All API calls run inside the page via `page.evaluate`; the cookie is read by the browser, not by our process. The token is written neither to disk nor to logs.
 - **The refresh token is never touched.**
 - **Address and card are stripped during normalization** — `points[]` and the `PAYMENT` block never reach the export.
-- **`~/.glovo-export/profile` is a live Glovo session.** Never copy it, sync it to the cloud, or hand it to anyone: whoever holds that folder holds your account. Deleting the folder kills the session.
+- **Amazon: name, address and payment method never leave the page.** The extractors return named fields only and skip the blocks that hold them; a test with a fake address and card checks that on every run. See [Never stored](#never-stored).
+- **`~/.glovo-export/profile` is a live Glovo session, `~/.glovo-export/amazon-profile` a live Amazon one.** Never copy them, sync them to the cloud, or hand them to anyone: whoever holds that folder holds your account. Deleting the folder kills the session.
 - The export (`out/*.json`) is personal data. `.gitignore` already covers it, but mind where you put the file.
 
 ## License
@@ -164,8 +214,10 @@ MIT — see [LICENSE](LICENSE).
 
 ## Disclaimer
 
-This project is not affiliated with, associated with, or endorsed by Glovo. "Glovo" and its logos belong to their respective owners.
+This project is not affiliated with, associated with, or endorsed by Glovo or Amazon. "Glovo", "Amazon" and their logos belong to their respective owners.
 
 The tool runs **on your machine, under your own session**, and reads only your own orders — the same thing you would get by opening your order history in a browser and copying it out by hand. No access is handed to any third party (Glovo's terms §2.2 is about giving third parties access to your account). Using it is your call, and so is the responsibility for that.
 
-The data comes from Glovo's internal API, which is undocumented and can change at any moment. When it does, the parser breaks — that is an expected property of a tool like this.
+The data comes from Glovo's internal API and from Amazon's order pages, both undocumented and free to change at any moment. When they do, the parser breaks — that is an expected property of a tool like this.
+
+Amazon's Conditions of Use disallow automated access to its services without consent. This tool runs in your own browser, under your own session, at a human pace, and reads only your own orders — nothing a third party could not be given by you sitting at the keyboard. Whether that is acceptable to you is your decision, as it is for Glovo.

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es-es">
+<head><meta charset="utf-8"><title>Tus pedidos</title></head>
+<body>
+<form>
+  <select name="timeFilter">
+    <option value="last30">últimos 30 días</option>
+    <option value="months-3">últimos 3 meses</option>
+    <option value="year-2025" selected>2025</option>
+    <option value="year-2024">2024</option>
+  </select>
+</form>
+<ul class="page-tabs"><li class="page-tabs__tab"><a href="/gp/your-account/order-history">Pedidos</a></li></ul>
+
+<div class="order-card js-order-card">
+  <div class="order-header">
+    <ul class="a-unordered-list a-nostyle a-horizontal">
+      <li class="order-header__header-list-item">
+        <div class="a-row a-size-mini"><span class="a-color-secondary a-text-caps">Pedido realizado</span></div>
+        <div class="a-row"><span class="a-size-base a-color-secondary aok-break-word">12 de marzo de 2025</span></div>
+      </li>
+      <li class="order-header__header-list-item">
+        <div class="a-row a-size-mini"><span class="a-color-secondary a-text-caps">Total</span></div>
+        <div class="a-row"><span class="a-size-base a-color-secondary aok-break-word">45,98 €</span></div>
+      </li>
+      <li class="order-header__header-list-item">
+        <div class="a-row a-size-mini"><span class="a-color-secondary a-text-caps">Enviar a</span></div>
+        <div class="a-row">
+          <div class="yohtmlc-recipient">
+            <span class="a-declarative"><a class="a-popover-trigger a-declarative insert-encrypted-trigger-text" href="javascript:void(0)">Persona Inventada</a></span>
+          </div>
+        </div>
+      </li>
+      <li class="order-header__header-list-item order-header__header-list-item--right">
+        <div class="a-row">
+          <span class="a-color-secondary a-text-caps">Pedido n.º</span>
+          <div class="yohtmlc-order-id"><span dir="ltr">123-4567890-1234567</span></div>
+        </div>
+        <div class="a-row">
+          <a class="a-link-normal" href="/your-orders/order-details?orderID=123-4567890-1234567&amp;ref=ppx_yo_dt_b_fed_order_details">Ver detalles del pedido</a>
+          <a class="a-link-normal" href="/gp/css/summary/print.html?orderID=123-4567890-1234567">Factura</a>
+        </div>
+      </li>
+    </ul>
+  </div>
+  <div class="delivery-box">
+    <div class="yohtmlc-shipment-status-primaryText"><span class="a-size-medium a-text-bold">Entregado el 14 de marzo</span></div>
+    <div class="yohtmlc-shipment-status-secondaryText"><span>El paquete se entregó en el buzón.</span></div>
+    <div class="yohtmlc-item">
+      <div class="product-image"><img alt=""><span class="product-image__qty">2</span></div>
+      <div class="yohtmlc-product-title">Cable USB-C ficticio 2 m</div>
+    </div>
+    <div class="yohtmlc-item">
+      <div class="product-image"><img alt=""></div>
+      <div class="yohtmlc-product-title">Funda de prueba para móvil</div>
+    </div>
+  </div>
+</div>
+
+<div class="order-card js-order-card">
+  <div class="order-header">
+    <ul class="a-unordered-list a-nostyle a-horizontal">
+      <li class="order-header__header-list-item">
+        <div class="a-row a-size-mini"><span class="a-color-secondary a-text-caps">Pedido realizado</span></div>
+        <div class="a-row"><span class="a-size-base a-color-secondary aok-break-word">3 de enero de 2025</span></div>
+      </li>
+      <li class="order-header__header-list-item">
+        <div class="a-row a-size-mini"><span class="a-color-secondary a-text-caps">Total</span></div>
+        <div class="a-row"><span class="a-size-base a-color-secondary aok-break-word">9,99 €</span></div>
+      </li>
+      <li class="order-header__header-list-item">
+        <div class="a-row a-size-mini"><span class="a-color-secondary a-text-caps">Enviar a</span></div>
+        <div class="a-row"><div class="yohtmlc-recipient"><span>Persona Inventada</span></div></div>
+      </li>
+      <li class="order-header__header-list-item order-header__header-list-item--right">
+        <div class="a-row">
+          <span class="a-color-secondary a-text-caps">Pedido n.º</span>
+          <div class="yohtmlc-order-id"><span dir="ltr">123-4567890-7654321</span></div>
+        </div>
+        <div class="a-row"><a class="a-link-normal" href="/your-orders/order-details?orderID=123-4567890-7654321&amp;ref=ppx_yo_dt_b_fed_order_details">Ver detalles del pedido</a></div>
+      </li>
+    </ul>
+  </div>
+  <div class="delivery-box">
+    <div class="yohtmlc-shipment-status-primaryText"><span class="a-size-medium a-text-bold">Cancelado</span></div>
+    <div class="yohtmlc-item">
+      <div class="product-image"><img alt=""></div>
+      <div class="yohtmlc-product-title">Libro imaginario de tapa blanda</div>
+    </div>
+  </div>
+</div>
+
+<ul class="a-pagination">
+  <li class="a-selected"><a href="/your-orders/orders?timeFilter=year-2025&amp;page=1">1</a></li>
+  <li class="a-normal"><a href="/your-orders/orders?timeFilter=year-2025&amp;page=2">2</a></li>
+  <li class="a-last"><a href="/your-orders/orders?timeFilter=year-2025&amp;page=2">Siguiente→</a></li>
+</ul>
+</body>
+</html>

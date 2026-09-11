@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es-es">
+<head><meta charset="utf-8"><title>Detalles del pedido</title></head>
+<body>
+<div id="orderDetails">
+  <div class="a-row">
+    <span data-component="orderDateLabel">Pedido realizado</span>
+    <span data-component="orderDate">12 de marzo de 2025</span>
+    <span data-component="orderIdLabel">Pedido n.º</span>
+    <span data-component="orderId">123-4567890-1234567</span>
+    <span data-component="poNumber"></span>
+    <div data-component="orderInvoice"><a href="/gp/css/summary/print.html?orderID=123-4567890-1234567">Factura 1</a></div>
+  </div>
+
+  <div data-component="orderSummary" class="a-box">
+    <div data-component="shippingAddress">
+      <h5>Dirección de envío</h5>
+      <ul class="a-unordered-list a-nostyle">
+        <li><span class="a-list-item">Persona Inventada</span></li>
+        <li><span class="a-list-item">Calle Falsa 42, 3º B</span></li>
+        <li><span class="a-list-item">28000 Madrid</span></li>
+        <li><span class="a-list-item">España</span></li>
+      </ul>
+    </div>
+    <div data-component="viewPaymentPlanSummaryWidget">
+      <h5>Método de pago</h5>
+      <div class="a-row"><span>Visa</span><span> •••• 4242</span></div>
+      <script type="a-state" data-a-state='{"key":"pmts-widget"}'>{"cardBrand":"Visa","tail":"4242","holder":"Persona Inventada"}</script>
+    </div>
+    <div data-component="chargeSummary">
+      <h5>Resumen del pedido</h5>
+      <ul class="a-unordered-list a-nostyle">
+        <li><span class="a-list-item"><div class="od-line-item-row"><div class="od-line-item-row-label"><span>Subtotal de producto(s):</span></div><div class="od-line-item-row-content a-span-last"><span>45,98 €</span></div></div></span></li>
+        <li><span class="a-list-item"><div class="od-line-item-row"><div class="od-line-item-row-label"><span>Envío:</span></div><div class="od-line-item-row-content a-span-last"><span>0,00 €</span></div></div></span></li>
+        <li><span class="a-list-item"><div class="od-line-item-row"><div class="od-line-item-row-label"><span>Total sin IVA:</span></div><div class="od-line-item-row-content a-span-last"><span>38,00 €</span></div></div></span></li>
+        <li><span class="a-list-item"><div class="od-line-item-row"><div class="od-line-item-row-label"><span>IVA estimado:</span></div><div class="od-line-item-row-content a-span-last"><span>7,98 €</span></div></div></span></li>
+        <li><span class="a-list-item"><div class="od-line-item-row"><div class="od-line-item-row-label"><span>Total:</span></div><div class="od-line-item-row-content a-span-last"><span>45,98 €</span></div></div></span></li>
+        <li><span class="a-list-item"><div class="od-line-item-row"><div class="od-line-item-row-label"><span>Importe total:</span></div><div class="od-line-item-row-content a-span-last"><span>45,98 €</span></div></div></span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div data-component="sharedOrderBuyer"><span>Persona Inventada</span></div>
+
+  <div data-component="shipments">
+    <div class="a-box">
+      <div data-component="shipmentStatus"><span class="a-size-medium a-text-bold">Entregado el 14 de marzo</span></div>
+      <div data-component="purchasedItems">
+        <div class="a-fixed-left-grid">
+          <div class="a-fixed-left-grid-col a-col-left"><div data-component="itemImage"><img alt=""></div></div>
+          <div class="a-fixed-left-grid-col a-col-right">
+            <div data-component="itemTitle"><div><a class="a-link-normal" href="/dp/B0FAKE0001?ref_=ppx_hzod_title_dt_b_fed_">Cable USB-C ficticio 2 m</a></div></div>
+            <div data-component="substitutionDetails"></div>
+            <div data-component="orderedMerchant"><span class="a-color-secondary">Vendido por: </span><a class="a-link-normal" href="/gp/aag/main?ie=UTF8&amp;seller=A1FAKESELLER">Tienda Ficticia SL</a></div>
+            <div data-component="itemCondition"><span>Nuevo</span></div>
+            <div data-component="itemReturnEligibility"><span>Devolución hasta el 12 de abril de 2025</span></div>
+            <div data-component="quantity"><span>2</span></div>
+            <div data-component="unitPrice"><span class="a-price"><span class="a-offscreen">17,99€</span><span aria-hidden="true"><span class="a-price-whole">17,<span class="a-price-decimal"></span></span><span class="a-price-fraction">99</span><span class="a-price-symbol">€</span></span></span></div>
+          </div>
+        </div>
+        <div class="a-fixed-left-grid">
+          <div class="a-fixed-left-grid-col a-col-left"><div data-component="itemImage"><img alt=""></div></div>
+          <div class="a-fixed-left-grid-col a-col-right">
+            <div data-component="itemTitle"><div><a class="a-link-normal" href="/dp/B0FAKE0002?ref_=ppx_hzod_title_dt_b_fed_">Funda de prueba para móvil</a></div></div>
+            <div data-component="orderedMerchant"><span class="a-color-secondary">Vendido por: Amazon.es</span></div>
+            <div data-component="itemCondition"><span>Nuevo</span></div>
+            <div data-component="quantity"></div>
+            <div data-component="unitPrice"><span class="a-price"><span class="a-offscreen">10,00€</span><span aria-hidden="true">10,00€</span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

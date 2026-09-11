@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Glovo — where the money goes</title>
+<title>Where your money goes</title>
 <style>
   :root {
     --bg: #fbfaf8;
@@ -138,11 +138,11 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Where your money goes on Glovo</h1>
-  <p class="sub">Drop your <code>glovo-orders-*.json</code> export here. The file is read in your browser — this page makes no network requests at all.</p>
+  <h1 id="title">Where your money goes</h1>
+  <p class="sub">Drop your <code>glovo-orders-*.json</code> or <code>amazon-orders-*.json</code> export here. The file is read in your browser — this page makes no network requests at all.</p>
 
   <div id="drop">
-    <p>Drop <code>glovo-orders-*.json</code> here</p>
+    <p>Drop <code>glovo-orders-*.json</code> or <code>amazon-orders-*.json</code> here</p>
     <button id="pick">Choose a file</button>
     <input id="file" type="file" accept="application/json,.json" hidden>
     <div id="err" class="err" hidden></div>
@@ -206,6 +206,7 @@ function makeMoney(currency) {
 
 function localParts(iso) {
   if (!iso) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return { month: iso.slice(0, 7), hour: null };
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
   return {
@@ -470,6 +471,12 @@ function nutritionCards(nutrition) {
 
 function render(file) {
   const orders = file.orders;
+  const source = file.meta?.source ?? 'glovo';
+  const amazon = source === 'amazon';
+  const sourceName = amazon ? 'Amazon' : 'Glovo';
+  const storeWord = amazon ? 'seller' : 'store';
+  document.title = `Where your money goes on ${sourceName}`;
+  $('title').textContent = `Where your money goes on ${sourceName}`;
   const currency = orders.find((order) => order.currency)?.currency ?? null;
   const money = makeMoney(currency);
 
@@ -487,8 +494,9 @@ function render(file) {
     const parts = localParts(order.date);
     if (!parts) { undated += 1; continue; }
     byMonth.set(parts.month, (byMonth.get(parts.month) ?? 0) + spendOf(order));
-    byHour.set(parts.hour, (byHour.get(parts.hour) ?? 0) + 1);
+    if (parts.hour !== null) byHour.set(parts.hour, (byHour.get(parts.hour) ?? 0) + 1);
   }
+  const hasHours = byHour.size > 0;
 
   const months = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]))
     .map(([key, value]) => ({ label: key.slice(2).replace('-', '.'), value }));
@@ -509,15 +517,18 @@ function render(file) {
   const stores = [...byStore.entries()].sort((a, b) => b[1].spend - a[1].spend).slice(0, 10)
     .map(([name, entry]) => ({ label: `${name} (${entry.count})`, value: entry.spend }));
 
-  const byVertical = new Map();
+  const splitKey = amazon
+    ? (order) => (order.store?.name === 'Amazon' ? 'Amazon' : 'Third-party sellers')
+    : (order) => ({ FOOD: 'Restaurants', Q_COMMERCE: 'Groceries' }[order.vertical] ?? order.vertical ?? 'UNKNOWN');
+  const bySplit = new Map();
   for (const order of counted) {
-    const key = order.vertical ?? 'UNKNOWN';
-    const entry = byVertical.get(key) ?? { spend: 0, count: 0 };
+    const key = splitKey(order);
+    const entry = bySplit.get(key) ?? { spend: 0, count: 0 };
     entry.spend += spendOf(order);
     entry.count += 1;
-    byVertical.set(key, entry);
+    bySplit.set(key, entry);
   }
-  const verticals = [...byVertical.entries()].sort((a, b) => b[1].spend - a[1].spend);
+  const splits = [...bySplit.entries()].sort((a, b) => b[1].spend - a[1].spend);
 
   const edges = [0, 10, 20, 30, 40, 50, 60];
   const buckets = edges.map((edge, index) => ({
@@ -550,17 +561,19 @@ function render(file) {
     notices.push(`<b>${cancelled.length}</b> cancelled orders excluded — they carry no total.`);
   }
   if (refunded.length) {
-    notices.push(`<b>${refunded.length}</b> refunded orders worth ${money(refundedSpend)} are <b>counted</b>: the API never says how much was returned, so spend keeps what was actually charged.`);
+    notices.push(`<b>${refunded.length}</b> refunded orders worth ${money(refundedSpend)} are <b>counted</b>: the export never learns how much was returned, so spend keeps what was actually charged.`);
   }
   if (undated) {
-    notices.push(`<b>${undated}</b> orders have no date and are missing from the month and hour charts.`);
+    notices.push(`<b>${undated}</b> orders have no date and are missing from the month${hasHours ? ' and hour' : ''} charts.`);
   }
   const mismatches = counted.filter((order) => order.validation?.productsMatch === false).length;
   if (mismatches) {
-    notices.push(`In <b>${mismatches}</b> orders the item sum disagrees with the PRODUCTS line — normal for groceries, where the basket changes after picking. Totals are unaffected.`);
+    notices.push(amazon
+      ? `In <b>${mismatches}</b> orders the item prices do not add up to the items subtotal — usually a per-item promotion the order page shows only in the totals. Totals are unaffected.`
+      : `In <b>${mismatches}</b> orders the item sum disagrees with the PRODUCTS line — normal for groceries, where the basket changes after picking. Totals are unaffected.`);
   }
 
-  const nutrition = estimateNutrition(counted);
+  const nutrition = amazon ? null : estimateNutrition(counted);
 
   const storeNames = [...byStore.keys()].sort((a, b) => byStore.get(b).count - byStore.get(a).count);
 
@@ -570,7 +583,7 @@ function render(file) {
       <div class="kpi"><div class="v">${counted.length}</div><div class="l">orders counted</div></div>
       <div class="kpi"><div class="v">${money(monthlyAverage)}</div><div class="l">per month on average</div></div>
       <div class="kpi"><div class="v">${money(median(sizes))}</div><div class="l">median order</div></div>
-      <div class="kpi"><div class="v">${money(Math.abs(discountTotal))}</div><div class="l">discounts caught (${discountedItems} items)</div></div>
+      ${amazon ? '' : `<div class="kpi"><div class="v">${money(Math.abs(discountTotal))}</div><div class="l">discounts caught (${discountedItems} items)</div></div>`}
     </div>
 
     ${notices.length ? `<div class="notice">${notices.join('<br>')}</div>` : ''}
@@ -579,24 +592,23 @@ function render(file) {
       <div class="card wide">
         <h2>Spend by month</h2>
         ${columns(months, (value) => Math.round(value))}
-        <p class="hint">Months are bucketed in your local timezone, not UTC.</p>
+        <p class="hint">${hasHours ? 'Months are bucketed in your local timezone, not UTC.' : `${sourceName} records the order date only, so no timezone conversion is needed.`}</p>
       </div>
 
       <div class="card wide">
-        <h2>Restaurants vs groceries</h2>
-        <div class="split">${verticals.map((entry, index) => {
+        <h2>${amazon ? 'Amazon vs third-party sellers' : 'Restaurants vs groceries'}</h2>
+        <div class="split">${splits.map((entry, index) => {
           const share = (entry[1].spend / (totalSpend || 1)) * 100;
           const color = index === 0 ? 'var(--accent)' : 'var(--bar2)';
           return `<div style="width:${share}%;background:${color}">${share >= 12 ? `${Math.round(share)}%` : ''}</div>`;
         }).join('')}</div>
-        <div class="legend">${verticals.map((entry, index) => {
-          const label = { FOOD: 'Restaurants', Q_COMMERCE: 'Groceries' }[entry[0]] ?? entry[0];
-          return `<span class="${index === 0 ? 'a' : 'b'}">${escapeText(label)} — ${money(entry[1].spend)}, ${entry[1].count} orders</span>`;
+        <div class="legend">${splits.map((entry, index) => {
+          return `<span class="${index === 0 ? 'a' : 'b'}">${escapeText(entry[0])} — ${money(entry[1].spend)}, ${entry[1].count} orders</span>`;
         }).join('')}</div>
       </div>
 
       <div class="card">
-        <h2>Top stores by spend</h2>
+        <h2>Top ${storeWord}s by spend</h2>
         ${bars(stores, money)}
         <p class="hint">Order count in brackets.</p>
       </div>
@@ -607,19 +619,21 @@ function render(file) {
         <p class="hint">How many orders fall into each band, ${currency === 'EUR' ? '€' : currency ?? ''}.</p>
       </div>
 
-      <div class="card wide">
+      ${hasHours ? `<div class="card wide">
         <h2>Time of day</h2>
         ${columns(hours, (value) => (value ? value : ''), { height: 170 })}
         <p class="hint">Local hours (${escapeText(Intl.DateTimeFormat().resolvedOptions().timeZone)}). The export stores dates in UTC; they are converted here.</p>
-      </div>
+      </div>` : ''}
 
       <div class="card wide">
         <h2>What you order most</h2>
         <select id="store-pick">${storeNames.map((name) => `<option>${escapeText(name)}</option>`).join('')}</select>
         <div id="store-items"></div>
-        <p class="hint">Within a single store only: different stores name the same product differently (&laquo;Agua Mineral 1,5 L 1 Ud.&raquo; and &laquo;Agua Mineral, Botella 1,5 L.&raquo; are the same water), so a top list across all stores would be a lie.</p>
+        <p class="hint">${amazon
+          ? 'Within a single seller only. Quantities are what the order page shows; prices are per line.'
+          : 'Within a single store only: different stores name the same product differently (&laquo;Agua Mineral 1,5 L 1 Ud.&raquo; and &laquo;Agua Mineral, Botella 1,5 L.&raquo; are the same water), so a top list across all stores would be a lie.'}</p>
       </div>
-${nutritionCards(nutrition)}
+${nutrition ? nutritionCards(nutrition) : ''}
     </div>
   `;
 
@@ -642,7 +656,7 @@ ${nutritionCards(nutrition)}
       ? `<table>${top.map(([label, entry]) =>
           `<tr><td>${escapeText(label)}</td><td class="n">${entry.count % 1 ? entry.count.toFixed(1) : entry.count}×</td><td class="n">${money(entry.spend)}</td></tr>`,
         ).join('')}</table>`
-      : '<p class="hint">No charged items in this store.</p>';
+      : `<p class="hint">No charged items in this ${storeWord}.</p>`;
   };
   picker.addEventListener('change', renderItems);
   renderItems();
@@ -651,7 +665,7 @@ ${nutritionCards(nutrition)}
   app.hidden = false;
   const foot = $('foot');
   foot.textContent = file.meta
-    ? `Exported ${(file.meta.exportedAt ?? '').slice(0, 10)} · ${orders.length} orders in the file · ${file.meta.warnings?.length ?? 0} parser warnings`
+    ? `${sourceName}${file.meta.marketplace ? ` (${file.meta.marketplace})` : ''} · exported ${(file.meta.exportedAt ?? '').slice(0, 10)} · ${orders.length} orders in the file · ${file.meta.warnings?.length ?? 0} parser warnings`
     : `${orders.length} orders from your account`;
   foot.hidden = false;
 }

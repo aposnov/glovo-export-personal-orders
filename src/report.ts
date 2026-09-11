@@ -1,12 +1,21 @@
-import type { ExportFile, NormalizedOrder } from './core/types.js';
+import type { NormalizedOrder, Warning } from './core/types.js';
+
+export interface SummaryInput {
+  orders: NormalizedOrder[];
+  seen: number;
+  requests: { label: string; count: number };
+  warnings: Warning[];
+  outputPath: string;
+  storesLabel?: string;
+}
 
 function spendOf(order: NormalizedOrder): number {
   if (order.excludedFromSpend !== null) return 0;
   return order.totals.total ?? 0;
 }
 
-export function printSummary(file: ExportFile, outputPath: string): void {
-  const { orders, meta } = file;
+export function printSummary(input: SummaryInput): void {
+  const { orders, seen, requests, warnings, outputPath } = input;
   const dates = orders.map((order) => order.date).filter((date): date is string => date !== null);
   const spend = orders.reduce((sum, order) => sum + spendOf(order), 0);
   const currency = orders.find((order) => order.currency)?.currency ?? '';
@@ -24,16 +33,16 @@ export function printSummary(file: ExportFile, outputPath: string): void {
 
   const lines = [
     '',
-    `orders exported   ${orders.length} (of ${meta.ordersSeen} in history)`,
+    `orders exported   ${orders.length} (of ${seen} in history)`,
     `date range        ${dates.length ? `${dates.sort()[0]!.slice(0, 10)} .. ${dates[dates.length - 1]!.slice(0, 10)}` : 'n/a'}`,
     `total spend       ${spend.toFixed(2)} ${currency}`.trimEnd(),
     `cancelled         ${cancelled} (no total, excluded from spend)`,
     `refunded          ${refunded.length} orders, ${refundedSpend.toFixed(2)} ${currency} counted (refund amount unknown)`.trimEnd(),
-    `api requests      ${meta.requestCount}`,
+    `${requests.label.padEnd(18)}${requests.count}`,
     `total mismatches  ${mismatches}`,
-    `warnings          ${meta.warnings.length}`,
+    `warnings          ${warnings.length}`,
     '',
-    'top stores:',
+    `${input.storesLabel ?? 'top stores'}:`,
     ...topStores.map(([name, count]) => `  ${String(count).padStart(4)}  ${name}`),
     '',
     `written to ${outputPath}`,
@@ -41,13 +50,13 @@ export function printSummary(file: ExportFile, outputPath: string): void {
 
   console.log(lines.join('\n'));
 
-  if (meta.warnings.length > 0) {
+  if (warnings.length > 0) {
     console.log('\nfirst warnings:');
-    for (const warning of meta.warnings.slice(0, 10)) {
+    for (const warning of warnings.slice(0, 10)) {
       console.log(`  [${warning.kind}] order ${warning.orderId ?? '?'}: ${warning.detail}`);
     }
-    if (meta.warnings.length > 10) {
-      console.log(`  ... and ${meta.warnings.length - 10} more (see meta.warnings in the JSON)`);
+    if (warnings.length > 10) {
+      console.log(`  ... and ${warnings.length - 10} more (see meta.warnings in the JSON)`);
     }
   }
 }

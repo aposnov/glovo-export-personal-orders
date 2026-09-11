@@ -1,12 +1,15 @@
 {
   "name": "glovo-export",
   "version": "1.0.0",
-  "description": "Export your Glovo order history to JSON — locally, in your own browser",
+  "description": "Export your Glovo and Amazon order history to JSON — locally, in your own browser",
   "license": "MIT",
   "type": "module",
   "scripts": {
     "login": "tsx src/cli.ts login",
     "export": "tsx src/cli.ts export",
+    "amazon:login": "tsx src/cli.ts amazon:login",
+    "amazon:probe": "tsx src/cli.ts amazon:probe",
+    "amazon:export": "tsx src/cli.ts amazon:export",
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

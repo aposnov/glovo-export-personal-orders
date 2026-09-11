@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en-gb">
+<head><meta charset="utf-8"><title>Your Orders</title></head>
+<body>
+<select name="timeFilter">
+  <option value="last30">last 30 days</option>
+  <option value="year-2025">2025</option>
+</select>
+<div class="order-card js-order-card">
+  <div class="order-header">
+    <ul class="a-unordered-list a-nostyle a-horizontal">
+      <li class="order-header__header-list-item">
+        <div class="a-row a-size-mini"><span class="a-color-secondary a-text-caps">Order placed</span></div>
+        <div class="a-row"><span class="a-size-base a-color-secondary aok-break-word">March 12, 2025</span></div>
+      </li>
+      <li class="order-header__header-list-item">
+        <div class="a-row a-size-mini"><span class="a-color-secondary a-text-caps">Total</span></div>
+        <div class="a-row"><span class="a-size-base a-color-secondary aok-break-word">£45.98</span></div>
+      </li>
+      <li class="order-header__header-list-item">
+        <div class="a-row a-size-mini"><span class="a-color-secondary a-text-caps">Ship to</span></div>
+        <div class="a-row"><div class="yohtmlc-recipient"><span>Persona Inventada</span></div></div>
+      </li>
+      <li class="order-header__header-list-item order-header__header-list-item--right">
+        <div class="a-row">
+          <span class="a-color-secondary a-text-caps">Order #</span>
+          <div class="yohtmlc-order-id"><span dir="ltr">123-4567890-1234567</span></div>
+        </div>
+        <div class="a-row"><a class="a-link-normal" href="/your-orders/order-details?orderID=123-4567890-1234567&amp;ref=ppx_yo_dt_b_fed_order_details">View order details</a></div>
+      </li>
+    </ul>
+  </div>
+  <div class="delivery-box">
+    <div class="yohtmlc-shipment-status-primaryText"><span>Delivered 14 March</span></div>
+    <div class="yohtmlc-item"><div class="yohtmlc-product-title">Imaginary USB-C cable 2 m</div></div>
+  </div>
+</div>
+<ul class="a-pagination">
+  <li class="a-selected"><a href="/your-orders/orders?timeFilter=year-2025&amp;page=1">1</a></li>
+  <li class="a-disabled a-last">Next→</li>
+</ul>
+</body>
+</html>

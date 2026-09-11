@@ -1,8 +1,18 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import { exportAmazonOrders, fetchListPage, type Loader } from './amazon/orders.js';
+import { localeFromLang, parseAmazonDate } from './amazon/locale.js';
+import {
+  AMAZON_PROFILE_DIR,
+  checkChallenge,
+  isSignedIn,
+  waitForLogin as waitForAmazonLogin,
+} from './amazon/session.js';
+import { apexOf, DEFAULT_MARKETPLACE, ORDERS_PATH } from './amazon/urls.js';
 import { openSession, PROFILE_DIR } from './browser.js';
 import { Fetcher } from './core/fetcher.js';
+import { parseMoney } from './core/normalize.js';
 import { fetchOrdersInRange, listOrderIds } from './core/orders.js';
 import { BrowserTransport } from './transport/browser.js';
 import { printSummary } from './report.js';
@@ -14,7 +24,13 @@ glovo-export
 
   npm run login
   npm run export -- --from 2025-01-01 --to 2026-12-31 [--expect-user <id>] [--out <path>]
+
+  npm run amazon:login  [-- --marketplace amazon.es]
+  npm run amazon:probe  [-- --marketplace amazon.es --year 2025]
+  npm run amazon:export -- --from 2025-01-01 --to 2026-12-31 [--marketplace amazon.es] [--out <path>] [--headless]
 `;
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 async function login(): Promise<number> {
   console.log(`profile: ${PROFILE_DIR}`);
@@ -102,6 +118,7 @@ async function runExport(args: {
 
     const file: ExportFile = {
       meta: {
+        source: 'glovo',
         exportedAt: new Date().toISOString(),
         accountUserId: claims.userId,
         grantType: claims.grantType,
@@ -119,11 +136,162 @@ async function runExport(args: {
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, `${JSON.stringify(file, null, 2)}\n`, 'utf8');
 
-    printSummary(file, outputPath);
+    printSummary({
+      orders: run.orders,
+      seen: ids.length,
+      requests: { label: 'api requests', count: fetcher.requestCount },
+      warnings: run.warnings,
+      outputPath,
+    });
     return 0;
   } finally {
     await session.close();
   }
+}
+
+function amazonSession(marketplace: string, headless: boolean) {
+  const apex = apexOf(marketplace);
+  return openSession(headless, { apex, profileDir: AMAZON_PROFILE_DIR, startPath: ORDERS_PATH });
+}
+
+async function amazonLogin(marketplace: string): Promise<number> {
+  const apex = apexOf(marketplace);
+  console.log(`profile: ${AMAZON_PROFILE_DIR}`);
+  const session = await amazonSession(marketplace, false);
+
+  if (await isSignedIn(session.page)) {
+    console.log(`\nalready signed in to ${marketplace}`);
+    await session.close();
+    return 0;
+  }
+
+  console.log(`\nsign in to ${marketplace} in the browser window. waiting up to 5 minutes...`);
+  const ok = await waitForAmazonLogin(session.page, 5 * 60_000, `${apex}${ORDERS_PATH}`);
+  await session.close();
+
+  if (!ok) {
+    console.error('no session detected. run amazon:login again.');
+    return 1;
+  }
+  console.log(`\nsigned in to ${marketplace}`);
+  return 0;
+}
+
+async function amazonProbe(marketplace: string, year: number): Promise<number> {
+  const session = await amazonSession(marketplace, false);
+  try {
+    const challenge = await checkChallenge(session.page);
+    if (!(await isSignedIn(session.page))) {
+      console.error(
+        challenge.challenge
+          ? `challenge    yes (${challenge.reason})`
+          : 'not signed in. run: npm run amazon:login',
+      );
+      return 1;
+    }
+
+    const loader: Loader = { page: session.page, apex: apexOf(marketplace), log: console.log, loads: 0 };
+    const list = await fetchListPage(loader, year, 1);
+    const locale = localeFromLang(list.lang);
+    const count = (pick: (card: (typeof list.cards)[number]) => boolean): number => list.cards.filter(pick).length;
+    const unmatched = [...new Set(list.cards.flatMap((card) => card.unmatchedLabels))];
+
+    console.log(
+      [
+        '',
+        `marketplace  ${marketplace}`,
+        `year         ${year}`,
+        `page lang    ${list.lang ?? '?'} (${locale ?? 'unsupported — will match all tables'})`,
+        'challenge    no',
+        `years seen   ${list.years.join(', ') || 'none found'}`,
+        `cards        ${list.cards.length}`,
+        `ids          ${count((card) => card.orderId !== null)}`,
+        `dates        ${count((card) => parseAmazonDate(card.date, locale) !== null)}`,
+        `totals       ${count((card) => parseMoney(card.total).value !== null)}`,
+        `detail links ${count((card) => card.detailHref?.includes('order-details') ?? false)}`,
+        `has next     ${list.hasNext ? 'yes' : 'no'}`,
+        `unmatched    ${unmatched.join(', ') || 'none'}`,
+      ].join('\n'),
+    );
+    return 0;
+  } finally {
+    await session.close();
+  }
+}
+
+async function amazonExport(args: {
+  from: string;
+  to: string;
+  out: string;
+  marketplace: string;
+  headless: boolean;
+}): Promise<number> {
+  const session = await amazonSession(args.marketplace, args.headless);
+  try {
+    if (!(await isSignedIn(session.page))) {
+      console.error('not signed in. run: npm run amazon:login');
+      return 1;
+    }
+
+    console.log(`marketplace ${args.marketplace}`);
+    console.log(`range ${args.from} .. ${args.to}\n`);
+
+    const loader: Loader = { page: session.page, apex: apexOf(args.marketplace), log: console.log, loads: 0 };
+    const run = await exportAmazonOrders(loader, {
+      from: args.from,
+      to: args.to,
+      onList: (year, page, cards) => {
+        process.stderr.write(`\rlist: ${year} page ${page}, ${cards} cards`);
+      },
+      onDetail: (done, total) => {
+        if (done === 1) process.stderr.write('\n');
+        process.stderr.write(`\rdetails: ${done}/${total}`);
+      },
+    });
+    process.stderr.write('\n');
+
+    const file: ExportFile = {
+      meta: {
+        source: 'amazon',
+        marketplace: args.marketplace,
+        exportedAt: new Date().toISOString(),
+        range: { from: args.from, to: args.to },
+        ordersSeen: run.cardsSeen,
+        ordersExported: run.orders.length,
+        pagesLoaded: loader.loads,
+        warnings: run.warnings,
+      },
+      orders: run.orders,
+    };
+
+    const outputPath = resolve(args.out);
+    await mkdir(dirname(outputPath), { recursive: true });
+    await writeFile(outputPath, `${JSON.stringify(file, null, 2)}\n`, 'utf8');
+
+    printSummary({
+      orders: run.orders,
+      seen: run.cardsSeen,
+      requests: { label: 'pages loaded', count: loader.loads },
+      warnings: run.warnings,
+      outputPath,
+      storesLabel: 'top sellers',
+    });
+    return 0;
+  } finally {
+    await session.close();
+  }
+}
+
+function parseRange(from: string | undefined, to: string | undefined): { from: string; to: string } | null {
+  if (!from || !to || !DATE.test(from) || !DATE.test(to)) {
+    console.error('--from and --to are required (YYYY-MM-DD)');
+    return null;
+  }
+  if (from > to) {
+    console.error('--from must not be after --to');
+    return null;
+  }
+  return { from, to };
 }
 
 async function main(): Promise<number> {
@@ -143,18 +311,66 @@ async function main(): Promise<number> {
       allowPositionals: false,
     });
 
-    if (!values.from || !values.to) {
-      console.error('--from and --to are required (YYYY-MM-DD)');
+    const range = parseRange(values.from, values.to);
+    if (!range) {
       console.error(USAGE);
       return 1;
     }
 
-    const defaultOut = `out/glovo-orders-${values.from.slice(0, 4)}-${values.to.slice(0, 4)}.json`;
+    const defaultOut = `out/glovo-orders-${range.from.slice(0, 4)}-${range.to.slice(0, 4)}.json`;
     return runExport({
-      from: values.from,
-      to: values.to,
+      from: range.from,
+      to: range.to,
       out: values.out ?? defaultOut,
       expectUser: values['expect-user'],
+    });
+  }
+
+  if (command === 'amazon:login' || command === 'amazon:probe' || command === 'amazon:export') {
+    const { values } = parseArgs({
+      args: process.argv.slice(3),
+      options: {
+        from: { type: 'string' },
+        to: { type: 'string' },
+        out: { type: 'string' },
+        marketplace: { type: 'string' },
+        year: { type: 'string' },
+        headless: { type: 'boolean' },
+      },
+      allowPositionals: false,
+    });
+
+    const marketplace = (values.marketplace ?? DEFAULT_MARKETPLACE).toLowerCase().replace(/^www\./, '');
+    try {
+      apexOf(marketplace);
+    } catch (error) {
+      console.error((error as Error).message);
+      return 1;
+    }
+
+    if (command === 'amazon:login') return amazonLogin(marketplace);
+
+    if (command === 'amazon:probe') {
+      const year = values.year ? Number(values.year) : new Date().getFullYear();
+      if (!Number.isInteger(year) || year < 1995) {
+        console.error('--year must be a four-digit year');
+        return 1;
+      }
+      return amazonProbe(marketplace, year);
+    }
+
+    const range = parseRange(values.from, values.to);
+    if (!range) {
+      console.error(USAGE);
+      return 1;
+    }
+    const defaultOut = `out/amazon-orders-${range.from.slice(0, 4)}-${range.to.slice(0, 4)}.json`;
+    return amazonExport({
+      from: range.from,
+      to: range.to,
+      out: values.out ?? defaultOut,
+      marketplace,
+      headless: values.headless ?? false,
     });
   }
 

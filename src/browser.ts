@@ -4,6 +4,7 @@ import { chromium, type BrowserContext, type Page } from 'playwright';
 
 export const APEX = 'https://glovoapp.com';
 export const PROFILE_DIR = join(homedir(), '.glovo-export', 'profile');
+const START_PATH = '/en/profile/past-orders';
 
 export interface Session {
   context: BrowserContext;
@@ -11,15 +12,25 @@ export interface Session {
   close: () => Promise<void>;
 }
 
-export async function openSession(headless: boolean): Promise<Session> {
-  const context = await chromium.launchPersistentContext(PROFILE_DIR, {
+export interface SessionOptions {
+  apex?: string;
+  profileDir?: string;
+  startPath?: string;
+}
+
+export async function openSession(headless: boolean, options: SessionOptions = {}): Promise<Session> {
+  const apex = options.apex ?? APEX;
+  const profileDir = options.profileDir ?? PROFILE_DIR;
+  const startPath = options.startPath ?? START_PATH;
+
+  const context = await chromium.launchPersistentContext(profileDir, {
     headless,
     viewport: { width: 1280, height: 900 },
     locale: 'en-GB',
   });
 
   const page = context.pages()[0] ?? (await context.newPage());
-  await page.goto(`${APEX}/en/profile/past-orders`, {
+  await page.goto(`${apex}${startPath}`, {
     waitUntil: 'domcontentloaded',
     timeout: 60_000,
   });
@@ -34,7 +45,7 @@ export async function openSession(headless: boolean): Promise<Session> {
 }
 
 export async function reloadApex(page: Page): Promise<void> {
-  await page.goto(`${APEX}/en/profile/past-orders`, {
+  await page.goto(`${APEX}${START_PATH}`, {
     waitUntil: 'domcontentloaded',
     timeout: 60_000,
   });

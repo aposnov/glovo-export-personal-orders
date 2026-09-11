@@ -64,6 +64,7 @@ export interface NormalizedItem {
   customizations: string | null;
   promotion: string | null;
   freeProduct: boolean;
+  asin?: string | null;
 }
 
 export interface NormalizedTotalLine {
@@ -106,17 +107,33 @@ export interface NormalizeResult {
   warnings: Warning[];
 }
 
+export interface GlovoMeta {
+  source: 'glovo';
+  exportedAt: string;
+  accountUserId: string | null;
+  grantType: string | null;
+  accountRole: string | null;
+  range: { from: string; to: string };
+  ordersSeen: number;
+  ordersExported: number;
+  requestCount: number;
+  warnings: Warning[];
+}
+
+export interface AmazonMeta {
+  source: 'amazon';
+  marketplace: string;
+  exportedAt: string;
+  range: { from: string; to: string };
+  ordersSeen: number;
+  ordersExported: number;
+  pagesLoaded: number;
+  warnings: Warning[];
+}
+
+export type ExportMeta = GlovoMeta | AmazonMeta;
+
 export interface ExportFile {
-  meta: {
-    exportedAt: string;
-    accountUserId: string | null;
-    grantType: string | null;
-    accountRole: string | null;
-    range: { from: string; to: string };
-    ordersSeen: number;
-    ordersExported: number;
-    requestCount: number;
-    warnings: Warning[];
-  };
+  meta: ExportMeta;
   orders: NormalizedOrder[];
 }
